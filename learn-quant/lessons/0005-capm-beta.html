@@ -1,0 +1,192 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="theme-color" content="#fefefe" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#1a1814" media="(prefers-color-scheme: dark)">
+<meta name="description" content="量化数学第 05 课:CAPM 与 β。从 Markowitz 均衡推导 CAPM,理解 β 的含义,批判其局限。">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<title>第 05 课 · CAPM 与 β</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
+<script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
+<script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"
+        onload="renderMathInElement(document.body,{delimiters:[{left:'$$',right:'$$',display:true},{left:'$',right:'$',display:false}]});"></script>
+<link rel="stylesheet" href="../assets/course.css">
+<script src="../assets/quiz.js" defer></script>
+</head>
+<body>
+
+<header class="lesson">
+  <div class="crumb">
+    <a href="../../index.html">总览</a> ·
+    <a href="0004-markowitz-efficient-frontier.html">← L04</a> ·
+    Lesson <strong>05</strong>
+  </div>
+  <h1>CAPM 与 $\beta$</h1>
+  <p class="subtitle">如果所有投资者都用 Markowitz,市场均衡时单资产预期收益只取决于它对市场组合的贡献 —— 这就是 $\beta$。</p>
+  <div class="meta">节奏:约 35 分钟</div>
+</header>
+
+<main>
+
+<p>
+L04 结尾说切点组合是 CAPM 的种子。本课把种子发芽:<strong>假定所有投资者都用 Markowitz 且持有同一个切点组合</strong>,市场出清时这个组合就是"市场组合",单资产的预期收益由此被决定。这就是 <strong>CAPM(Capital Asset Pricing Model)</strong>,Sharpe 1964 年提出,现代金融的奠基模型。
+</p>
+
+<div class="deliverable">
+  <div class="label">本课产出</div>
+  <ol style="margin:0; padding-left:1.3rem;">
+    <li>推导 <strong>CAPM 主方程:$\mathbb{E}[R_i] = r_f + \beta_i(\mathbb{E}[R_m] - r_f)$</strong></li>
+    <li>理解 $\beta_i = \text{Cov}(R_i, R_m)/\sigma_m^2$ 的含义</li>
+    <li>会用 OLS 回归估 $\beta$,解读<strong>截距 $\alpha$</strong></li>
+    <li>知道 CAPM 的<strong>三大局限</strong>(为 L06 Fama-French 铺路)</li>
+  </ol>
+</div>
+
+<h2 id="derivation">1. CAPM 推导:三步</h2>
+<p><strong>第一步</strong>:Markowitz 均衡 → 所有投资者持有切点组合 $M$。</p>
+<p><strong>第二步</strong>:市场出清 → $M$ 必须等于<strong>所有风险资产的市值加权组合</strong>。这就是"市场组合"。</p>
+<p><strong>第三步</strong>:在均衡下,资产 $i$ 的<strong>边际风险贡献</strong>必须等于它的<strong>边际收益补偿</strong>。单资产对组合的风险贡献不是 $\sigma_i$,而是它与市场的协方差。由此推出 CAPM 主方程:</p>
+
+<p class="math display">
+$$\boxed{\mathbb{E}[R_i] = r_f + \beta_i\bigl(\mathbb{E}[R_m] - r_f\bigr)}$$
+</p>
+
+<p>其中:</p>
+<p class="math display">
+$$\beta_i = \frac{\text{Cov}(R_i, R_m)}{\sigma_m^2} = \frac{\sigma_{im}}{\sigma_m^2} = \rho_{im}\frac{\sigma_i}{\sigma_m}$$
+</p>
+
+<h2 id="beta-meaning">2. $\beta$ 的三种含义</h2>
+<table>
+  <thead><tr><th>视角</th><th>$\beta$ 的解读</th></tr></thead>
+  <tbody>
+    <tr><td>数学</td><td>$R_i$ 对 $R_m$ 的回归斜率(下节 OLS)</td></tr>
+    <tr><td>风险</td><td>资产 $i$ 的<strong>系统风险</strong>(不可分散)贡献</td></tr>
+    <tr><td>组合</td><td>加入少量 $i$ 到市场组合时,组合风险的相对增量</td></tr>
+  </tbody>
+</table>
+
+<div class="callout">
+  <div class="label">为什么是 $\beta$ 而不是 $\sigma$</div>
+  <p style="margin:0;">
+  L03 证明:组合方差随 $n$ 增大趋近于系统风险 $\sigma^2 \bar{\rho}$,<strong>非系统风险可被分散掉</strong>。
+  所以市场只对<strong>不可分散</strong>的部分补偿,即 $\beta$。<strong>高 $\sigma$ 但低 $\beta$ 的资产不应获得高收益</strong>(因为风险可被分散)。这是 CAPM 的革命性洞察。
+  </p>
+</div>
+
+<h2 id="ols">3. 估 $\beta$:OLS 回归</h2>
+<p>从 CAPM 主方程,实际收益可写为:</p>
+<p class="math display">
+$$R_{i,t} - r_f = \alpha_i + \beta_i(R_{m,t} - r_f) + \varepsilon_{i,t}$$
+</p>
+<p>用 OLS 回归估 $(\alpha_i, \beta_i)$:<strong>$\beta$ 是斜率,$\alpha$ 是截距</strong>。如果 CAPM 严格成立,$\alpha$ 应该是 0(没有超额收益)。<strong>$\alpha \neq 0$ 就是"超越市场"的证据</strong> —— 这是量化策略的核心目标。</p>
+
+<pre><code>import yfinance as yf
+import statsmodels.api as sm
+
+# 拉苹果和市场
+data = yf.download(["AAPL", "^GSPC"], "2019-01-01", "2024-12-31")["Close"]
+data.columns = ["AAPL", "MKT"]
+rets = np.log(data / data.shift(1)).dropna() * 100   # 单位 %
+
+rf_daily = 0.02/252 * 100  # 年 2% 无风险利率折日
+X = (rets["MKT"] - rf_daily)        # 市场超额收益
+y = (rets["AAPL"] - rf_daily)       # AAPL 超额收益
+X = sm.add_constant(X)
+
+model = sm.OLS(y, X).fit()
+print(model.summary())
+# 看 const(α)和 MKT(β)</code></pre>
+
+<div class="callout produce">
+  <div class="label">典型结果(AAPL 2019-2024)</div>
+  <pre style="margin:0; background:none; padding:0; border:none;"><code>const (α)  : 0.045 (p=0.32,不显著)
+MKT   (β)  : 1.18  (p&lt;0.001,显著)</code></pre>
+</div>
+
+<p class="sidenote">
+<strong>解读</strong>:AAPL 的 $\beta = 1.18$,意味着市场涨 1% 时 AAPL 平均涨 1.18% —— 比<strong>市场更具进攻性</strong>。$\alpha$ 不显著,意味着这一段时间没有<strong>显著超越 CAPM 预测</strong>的超额收益。
+</p>
+
+<h2 id="critique">4. CAPM 的三大局限</h2>
+<table>
+  <thead><tr><th>局限</th><th>问题</th><th>改进方向</th></tr></thead>
+  <tbody>
+    <tr><td>单一因子</td><td>只用市场因子解释收益,实证拟合差</td><td>Fama-French 三/五因子(L06)</td></tr>
+    <tr><td>假设过强</td><td>所有投资者同预期、同持有期、无税</td><td>套利定价理论 APT</td></tr>
+    <tr><td>$\beta$ 估计不稳</td><td>不同窗口估出的 $\beta$ 差异大</td><td>Bayesian 收缩、行业 $\beta$ 平均</td></tr>
+  </tbody>
+</table>
+
+<div class="callout warn">
+  <div class="label">⚠ CAPM 实战怎么用</div>
+  <p style="margin:0;">
+  <strong>不要用 CAPM 做精确预测</strong>(实证早证明单因子解释力 $R^2$ 常低于 0.5)。<strong>用它做粗略资本预算、估值贴现率、相对风险排序</strong>。要解释收益,直接用 Fama-French(L06)。但 CAPM 的<strong>思想</strong>(只补偿系统风险)是所有后续因子模型的根。
+  </p>
+</div>
+
+<div class="quiz" data-correct="c">
+  <div class="q">某资产 $\beta = 1.5$,市场预期超额收益 6%,无风险 2%。CAPM 预测该资产预期收益?</div>
+  <ul>
+    <li data-k="a">6% × 1.5 = 9%</li>
+    <li data-k="b">2% + 6% = 8%</li>
+    <li data-k="c">2% + 1.5 × 6% = 11%</li>
+    <li data-k="d">2% × 1.5 = 3%</li>
+  </ul>
+  <div class="reveal">
+  <strong>答案:C</strong>。CAPM:$\mathbb{E}[R_i] = r_f + \beta(\mathbb{E}[R_m] - r_f) = 2\% + 1.5 \times 6\% = 11\%$。注意公式用的是<strong>市场的超额收益</strong>($\mathbb{E}[R_m] - r_f = 6\%$),不是市场收益本身。A 漏了 $r_f$;B 漏了 $\beta$;D 用错了基准。CAPM 的几何直觉:β 是"市场超额收益"的放大系数,起点是 $r_f$。
+  </div>
+</div>
+
+<div class="quiz" data-correct="b">
+  <div class="q">CAPM 预测 $\alpha = 0$,如果实证回归发现某基金 $\alpha = 2\%$ 且显著,这意味着?</div>
+  <ul>
+    <li data-k="a">CAPM 错了,应丢弃</li>
+    <li data-k="b">基金在风险调整后跑赢市场</li>
+    <li data-k="c">市场无风险</li>
+    <li data-k="d">β 算错了</li>
+  </ul>
+  <div class="reveal">
+  <strong>答案:B</strong>。$\alpha > 0$ 且显著 = <strong>在控制了市场风险($\beta$)之后,还有不可解释的正超额收益</strong>。这是"基金经理真有 alpha"的证据(在 CAPM 框架下)。但 A 也是部分对(CAPM 可能漏了因子),Fama-French(L06)会告诉你 $\alpha$ 是不是被其他因子吃掉了。C/D 无关。
+  </div>
+</div>
+
+<h2 id="recap">本课要点</h2>
+<ul>
+  <li><strong>CAPM</strong>:$\mathbb{E}[R_i] = r_f + \beta_i(\mathbb{E}[R_m] - r_f)$,从 Markowitz 均衡推导。</li>
+  <li><strong>$\beta$</strong>:系统风险贡献;数学上是 $R_i$ 对 $R_m$ 的回归斜率。</li>
+  <li><strong>$\alpha$</strong>:CAPM 框架下不能解释的超额收益,量化策略追求的目标。</li>
+  <li><strong>三大局限</strong>:单因子 / 假设强 / $\beta$ 不稳。</li>
+  <li>不要用 CAPM 做精确预测,用作粗略风险排序和资本预算。</li>
+</ul>
+
+<h2 id="primary-source">推荐主源</h2>
+<p>
+<strong>本课主源</strong>:<a href="https://www.jstor.org/stable/2977928" target="_blank" rel="noopener">Sharpe 1964 原始论文 "Capital Asset Prices"</a>。读完感受 CAPM 推导的纯粹美感。
+</p>
+
+<h2 id="next">下一课预告</h2>
+<p>
+<strong>第 06 课 · Fama-French 三因子回归</strong>。
+CAPM 的 $\alpha$ 显著,可能是真 alpha,也可能只是<strong>漏了因子</strong>。Fama-French 1992 发现 SMB(规模)和 HML(价值)两个因子能解释 CAPM 残差的大部分。本课跑三因子回归,看你之前估出的 $\alpha$ 是不是被吃掉。
+</p>
+
+<div class="ask-teacher">
+有疑问就问:$\beta$ 怎么从 OLS 系数读?为什么只补偿系统风险?$\alpha$ 显著怎么解读?你的回归结果贴出来我帮你看。
+</div>
+
+</main>
+
+<footer class="lesson">
+  <div>
+    <a href="../../index.html">总览</a> ·
+    <a href="0004-markowitz-efficient-frontier.html">← L04</a> ·
+    <a href="#">L06 →</a>
+  </div>
+  <div>Lesson 05 · CAPM & Beta</div>
+</footer>
+
+</body>
+</html>

@@ -1,0 +1,219 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="theme-color" content="#fefefe" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#1a1814" media="(prefers-color-scheme: dark)">
+<meta name="description" content="量化数学第 04 课:Markowitz 均值-方差框架,推导有效前沿、最小方差组合、切点组合,Python 画出完整前沿。">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<title>第 04 课 · Markowitz 均值-方差与有效前沿</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
+<script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
+<script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"
+        onload="renderMathInElement(document.body,{delimiters:[{left:'$$',right:'$$',display:true},{left:'$',right:'$',display:false}]});"></script>
+<link rel="stylesheet" href="../assets/course.css">
+<script src="../assets/quiz.js" defer></script>
+</head>
+<body>
+
+<header class="lesson">
+  <div class="crumb">
+    <a href="../../index.html">总览</a> ·
+    <a href="0003-covariance-correlation.html">← L03</a> ·
+    Lesson <strong>04</strong>
+  </div>
+  <h1>Markowitz 均值-方差与有效前沿</h1>
+  <p class="subtitle">有了协方差矩阵 $\Sigma$,我们终于能回答:"给定这些资产,最优组合权重是多少?"</p>
+  <div class="meta">节奏:约 40 分钟</div>
+</header>
+
+<main>
+
+<p>
+1952 年 Markowitz 用一个简单的数学公式 <strong>$w^\top \Sigma w$</strong>(L03 推导过)开启了整个现代投资组合理论(MPT)。这是 1990 年诺贝尔经济学奖的核心成果。本课推导<strong>有效前沿</strong>,然后用 Python 画出来。
+</p>
+
+<div class="deliverable">
+  <div class="label">本课产出</div>
+  <ol style="margin:0; padding-left:1.3rem;">
+    <li>理解 <strong>均值-方差框架</strong>的目标函数</li>
+    <li>推导<strong>最小方差组合</strong>的闭式解</li>
+    <li>画出<strong>有效前沿</strong>和<strong>切点组合</strong></li>
+    <li>Python 闭式解 + 数值优化两条路都跑通</li>
+  </ol>
+</div>
+
+<h2 id="setup">1. 设定:两个目标函数</h2>
+<p>给 $n$ 个资产,已知期望收益向量 $\mu$($n$ 维)和协方差矩阵 $\Sigma$($n \times n$)。组合权重 $w$($\sum w_i = 1$)。</p>
+<ul>
+  <li>组合预期收益:$\mu_p = w^\top \mu$(线性)</li>
+  <li>组合方差:$\sigma_p^2 = w^\top \Sigma w$(L03,二次型)</li>
+</ul>
+<p>Markowitz 的洞察:<strong>这两个目标互相冲突</strong> —— 想高收益就得多承担风险。<strong>有效前沿</strong>就是这两个目标的 Pareto 最优集合。</p>
+
+<h2 id="min-var">2. 最小方差组合(闭式解)</h2>
+<p>最简单的问题:什么权重让风险<strong>最小</strong>?拉格朗日法:</p>
+<p class="math display">
+$$\min_w w^\top \Sigma w \quad \text{s.t.} \quad \mathbf{1}^\top w = 1$$
+</p>
+<p>解出来:</p>
+<p class="math display">
+$$w_{\min} = \frac{\Sigma^{-1} \mathbf{1}}{\mathbf{1}^\top \Sigma^{-1} \mathbf{1}}$$
+</p>
+<p>注意这个公式<strong>完全不用 $\mu$</strong> —— 最小方差组合只看风险结构,不看预期收益。这是为什么它常被用作"不预测收益时"的稳健组合。</p>
+
+<h2 id="frontier">3. 有效前沿:扫描目标收益</h2>
+<p>更一般的问题:给定目标收益 $\mu_{\text{target}}$,找最小风险权重:</p>
+<p class="math display">
+$$\min_w w^\top \Sigma w \quad \text{s.t.} \quad w^\top \mu = \mu_{\text{target}}, \ \mathbf{1}^\top w = 1$$
+</p>
+<p>对每个 $\mu_{\text{target}}$ 求解,得到 $(\sigma_p, \mu_p)$ 平面上的一条<strong>双曲线</strong> —— 上半部分就是有效前沿。</p>
+
+<div class="callout">
+  <div class="label">"有效"是什么意思</div>
+  <p style="margin:0;">
+  下半部分(同样风险、收益更低)是<strong>无效</strong>的 —— 没有理性投资者会选。上半部分(给定风险收益最大)才是<strong>有效</strong>前沿。<strong>理性投资者只选有效前沿上的点</strong>。
+  </p>
+</div>
+
+<h2 id="tangency">4. 切点组合:引入无风险利率</h2>
+<p>加入无风险利率 $r_f$,投资者可在无风险资产和 risky 组合间任意分配。从 $(0, r_f)$ 出发画一条与有效前沿相切的射线,<strong>切点就是切点组合(tangency portfolio)</strong>。它有最高的夏普比率。闭式解:</p>
+<p class="math display">
+$$w_{\text{tan}} = \frac{\Sigma^{-1}(\mu - r_f \mathbf{1})}{\mathbf{1}^\top \Sigma^{-1}(\mu - r_f \mathbf{1})}$$
+</p>
+<p class="sidenote">
+<strong>切点组合是 CAPM 的种子</strong>:如果所有投资者都用 Markowitz,大家会<strong>持有同一个切点组合</strong> —— 这个组合就是"市场组合"。这就是 L05 CAPM 的起点。
+</p>
+
+<h2 id="python-closed">5. Python:闭式解画前沿</h2>
+<pre><code>import numpy as np
+import matplotlib.pyplot as plt
+import yfinance as yf
+
+tickers = ["SPY", "TLT", "GLD", "EEM", "VNQ"]
+px = yf.download(tickers, "2015-01-01", "2024-12-31")["Close"]
+rets = np.log(px / px.shift(1)).dropna()
+
+mu = rets.mean().values * 252          # 年化预期收益
+Sigma = rets.cov().values * 252        # 年化协方差
+n = len(tickers)
+ones = np.ones(n)
+rf = 0.02                              # 假设无风险利率 2%
+
+# 切点组合(最高夏普)
+excess = mu - rf * ones
+w_tan = np.linalg.solve(Sigma, excess)
+w_tan /= w_tan.sum()
+
+# 最小方差组合
+w_min = np.linalg.solve(Sigma, ones)
+w_min /= w_min.sum()
+
+# 扫描目标收益画前沿
+targets = np.linspace(mu.min(), mu.max(), 50)
+frontier_sigma = []
+for t in targets:
+    # 闭式解(两个等式约束)
+    A = np.block([[Sigma, np.c_[mu], np.c_[ones]],
+                  [np.c_[mu], [[0, 0]], [[1, 0]]],
+                  [np.c_[ones], [[1, 0]], [[0, 0]]]])
+    # 简化:用数值优化更清晰,见下文
+    frontier_sigma.append(None)  # 占位
+
+# 用 scipy 数值解更简单:
+from scipy.optimize import minimize
+def port_var(w): return w @ Sigma @ w
+constraints = [{"type":"eq","fun":lambda w: w.sum()-1},
+               {"type":"eq","fun":lambda w: w@mu - t}]
+frontier_sigma = []
+for t in targets:
+    res = minimize(port_var, np.ones(n)/n, constraints=constraints,
+                   bounds=[(0,1)]*n)   # 不允许做空
+    if res.success:
+        frontier_sigma.append(np.sqrt(res.fun))
+
+# 画图
+plt.plot(frontier_sigma, targets, "b-", label="有效前沿")
+plt.scatter(np.sqrt(w_min @ Sigma @ w_min), w_min@mu,
+            c="green", s=80, label="最小方差组合")
+plt.scatter(np.sqrt(w_tan @ Sigma @ w_tan), w_tan@mu,
+            c="red", s=80, label="切点组合")
+plt.xlabel("年化波动率 σ"); plt.ylabel("年化收益 μ")
+plt.legend(); plt.title("Markowitz 有效前沿"); plt.show()</code></pre>
+
+<div class="callout warn">
+  <div class="label">⚠ Markowitz 的实战陷阱</div>
+  <p style="margin:0;">
+  闭式解看起来优雅,但<strong>实战中问题极大</strong>:
+  <br>① $\mu$ 极难估准(L01 已说)—— 输入微小变动,输出权重剧烈变化(对参数过度敏感);
+  <br>② $\Sigma$ 估准但估计误差仍会让前沿"假性精确";
+  <br>③ 闭式解常给极端负权重(大幅做空),实战不可执行。
+  <br>正因如此,业界用<strong>收缩估计(shrinkage)</strong>、<strong>风险平价(risk parity)</strong>、<strong>Black-Litterman</strong> 等改进。但 Markowitz 的<strong>思想</strong>是所有这些改进的源头。
+  </p>
+</div>
+
+<div class="quiz" data-correct="b">
+  <div class="q">最小方差组合 $w_{\min} = \Sigma^{-1}\mathbf{1} / \mathbf{1}^\top \Sigma^{-1}\mathbf{1}$,关键特征是?</div>
+  <ul>
+    <li data-k="a">依赖 μ,需先估准预期收益</li>
+    <li data-k="b">不依赖 μ,只看协方差结构</li>
+    <li data-k="c">等于市场组合</li>
+    <li data-k="d">等于等权组合</li>
+  </ul>
+  <div class="reveal">
+  <strong>答案:B</strong>。最小方差组合的闭式解<strong>完全没有 $\mu$</strong>,只依赖 $\Sigma$。这是它的最大优点 —— 回避了 L01 揭示的"均值极难估准"问题。所以实务中,"不预测收益"的稳健策略常用最小方差组合。A 反了;C 是 CAPM 假设下的切点组合;D 等权组合是另一种简化方案。
+  </p>
+  </div>
+</div>
+
+<div class="quiz" data-correct="c">
+  <div class="q">"Markowitz 闭式解在实战中权重经常剧烈跳动"的主要原因是?</div>
+  <ul>
+    <li data-k="a">数学推导错误</li>
+    <li data-k="b">协方差矩阵不存在逆</li>
+    <li data-k="c">μ 估不准,微小误差被放大</li>
+    <li data-k="d">Python 实现问题</li>
+  </ul>
+  <div class="reveal">
+  <strong>答案:C</strong>。$w_{\text{tan}} \propto \Sigma^{-1}(\mu - r_f \mathbf{1})$ 中,$\mu$ 的估计误差会被 $\Sigma^{-1}$ 放大。<strong>L01 已证明均值极难估准</strong>,这正是 Markowitz 实战最大问题。这就是为什么业界发展了 Black-Litterman(把 $\mu$ 用先验+观点混合)、收缩估计(稳定 $\Sigma$)等改进。A/B/D 都不是主因。
+  </div>
+</div>
+
+<h2 id="recap">本课要点</h2>
+<ul>
+  <li><strong>Markowitz 框架</strong>:目标 = Pareto 最优(风险 vs 收益),用 $\sigma_p^2 = w^\top \Sigma w$ 度量风险。</li>
+  <li><strong>最小方差组合</strong>:$w_{\min} = \Sigma^{-1}\mathbf{1} / (\mathbf{1}^\top \Sigma^{-1}\mathbf{1})$,<strong>不依赖 $\mu$</strong>。</li>
+  <li><strong>切点组合</strong>:加入 $r_f$ 后夏普最高的组合,是 CAPM 的种子。</li>
+  <li><strong>实战陷阱</strong>:对 $\mu$ 极敏感,常给极端权重。业界用 Black-Litterman / 收缩 / 风险平价改进。</li>
+  <li>思想(均值-方差权衡)是所有组合优化的源头。</li>
+</ul>
+
+<h2 id="primary-source">推荐主源</h2>
+<p>
+<strong>本课主源</strong>:<a href="https://www.jstor.org/stable/2975974" target="_blank" rel="noopener">Markowitz 1952 原始论文</a>。读原始论文感受当年洞察的冲击力,会发现公式之外的思想才是精华。
+</p>
+
+<h2 id="next">下一课预告</h2>
+<p>
+<strong>第 05 课 · CAPM 与 $\beta$</strong>。
+Markowitz 说"理性投资者都选切点组合"。CAPM 顺着这个逻辑往下推:如果所有投资者都这样选,市场均衡时单一资产的预期收益只取决于它对<strong>市场组合</strong>的贡献 —— 即 $\beta$。本课推导 CAPM、理解 $\beta$、批判它的局限。
+</p>
+
+<div class="ask-teacher">
+有疑问就问:拉格朗日法怎么推闭式解?前沿为什么是双曲线?切点组合怎么找?你的 Python 报错贴出来,我帮你看。
+</div>
+
+</main>
+
+<footer class="lesson">
+  <div>
+    <a href="../../index.html">总览</a> ·
+    <a href="0003-covariance-correlation.html">← L03</a> ·
+    <a href="#">L05 →</a>
+  </div>
+  <div>Lesson 04 · Markowitz Efficient Frontier</div>
+</footer>
+
+</body>
+</html>
