@@ -1,0 +1,383 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="theme-color" content="#fefefe" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#1a1814" media="(prefers-color-scheme: dark)">
+<meta name="description" content="数据治理第 06 课:OpenLineage 标准 + Marquez 参考实现,采集 ETL 血缘,可视化端到端流向。可运行 docker 命令。">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<title>第 06 课 · 数据血缘:OpenLineage / Marquez PoC</title>
+<link rel="stylesheet" href="../assets/course.css">
+<script src="../assets/quiz.js" defer></script>
+</head>
+<body>
+
+<header class="lesson">
+  <div class="crumb">
+    <a href="../../index.html">总览</a> ·
+    <a href="0005-data-quality-gx.html">← L05</a> ·
+    Lesson <strong>06</strong>(技术三连 · 3/3)
+  </div>
+  <h1>数据血缘 —— OpenLineage / Marquez PoC</h1>
+  <p class="subtitle">L04 让你看到"有什么表",L05 让你知道"数据好不好"。本课解决最后一块拼图:"这张表的数字,到底从哪来、经过了什么变换"。</p>
+  <div class="meta">
+    节奏:约 75 分钟 · 产出物:本地 Marquez 实例 + 采集到血缘的 ETL
+  </div>
+</header>
+
+<main>
+
+<div class="deliverable">
+  <div class="label">本课产出物</div>
+  <ol style="margin:0; padding-left:1.3rem;">
+    <li><strong>本地 Marquez 实例</strong> —— 跑在 http://localhost:3000</li>
+    <li><strong>带血缘的最小 ETL 脚本</strong> —— Python,采集 OpenLineage 事件</li>
+    <li><strong>自己场景的血缘采集计划</strong> —— 哪些 job 要接入</li>
+  </ol>
+</div>
+
+<!-- ====================================================== -->
+<h2 id="what-is-lineage">1. 血缘解决什么(10 分钟)</h2>
+
+<h3>血缘的价值 —— 三个真实场景</h3>
+
+<table>
+  <thead><tr><th>场景</th><th>没有血缘时</th><th>有血缘时</th></tr></thead>
+  <tbody>
+    <tr>
+      <td><strong>影响分析</strong></td>
+      <td>改这张表的字段,不知道下游哪些报表会爆</td>
+      <td>看血缘 DAG,秒级列出所有下游消费者</td>
+    </tr>
+    <tr>
+      <td><strong>根因定位</strong></td>
+      <td>报表数字异常,挨个查上游表</td>
+      <td>沿血缘反向追溯,直奔源头</td>
+    </tr>
+    <tr>
+      <td><strong>合规审计</strong></td>
+      <td>无法证明"这份用户数据经历了哪些加工、流向何处"</td>
+      <td>血缘 + 操作元数据 = 审计所需轨迹</td>
+    </tr>
+  </tbody>
+</table>
+
+<div class="callout">
+  <div class="label">血缘的本质</div>
+  <p style="margin:0;">
+  血缘不是"画图好看",是<strong>可追溯性(Traceability)</strong>的工程化。它把分散在 ETL、调度器、SQL、表注释里的"数据流向信息"<strong>自动采集到一处</strong>。这才是 DCMM "数据架构"能力域的核心要求 —— <strong>有图,有据,有更新</strong>。
+  </p>
+</div>
+
+<h3>血缘的三个层次</h3>
+
+<table>
+  <thead><tr><th>层</th><th>粒度</th><th>典型工具/方式</th></tr></thead>
+  <tbody>
+    <tr><td><strong>表级 Table-level</strong></td><td>表 A → 表 B</td><td>调度器元数据、手工标注</td></tr>
+    <tr><td><strong>列级 Column-level</strong></td><td>列 X 来自列 Y</td><td>SQL 解析(如 dbt、Spark 解析器)</td></tr>
+    <tr><td><strong>操作级 Operational</strong></td><td>哪个 job 在何时跑了,状态如何</td><td>OpenLineage 事件流</td></tr>
+  </tbody>
+</table>
+
+<p class="sidenote">
+<strong>层级取舍</strong>:表级最简单,通常先做(满足 80% 场景);列级最有用但最难(SQL 解析易错);操作级解决"哪天哪个版本出错"。OpenLineage <strong>三层都覆盖</strong>,这就是它成为标准的根本原因。
+</p>
+
+<div class="quiz" data-correct="b">
+  <div class="q">Q1 · 数据血缘最直接的价值场景是?</div>
+  <ul>
+    <li data-k="a">让看板更美观</li>
+    <li data-k="b">影响分析与根因定位</li>
+    <li data-k="c">减少存储成本</li>
+    <li data-k="d">加快查询速度</li>
+  </ul>
+  <div class="reveal">
+  <strong>答案:B</strong>。血缘的核心价值是<strong>可追溯性</strong>:改字段前做影响分析(下游谁会爆)、出问题时做根因定位(数字从哪来错了)。A(美观)是副作用;C/D 与血缘无关(那是存储/查询优化的事)。血缘本质是<strong>关于数据流向的知识</strong>,不是性能工具。
+  </div>
+</div>
+
+<!-- ====================================================== -->
+<h2 id="openlineage">2. OpenLineage 标准(10 分钟)</h2>
+
+<p>
+OpenLineage 是<strong>开放血缘采集标准</strong>(LF AI & Data 基金会托管)。它的核心创新是定义了<strong>统一的血缘事件格式</strong>,让 Airflow / Spark / dbt / Flink / Snowflake 等不同工具用同一种方式报告"我做了什么、动了哪些数据"。
+</p>
+
+<h3>OpenLineage 事件的核心字段</h3>
+
+<pre><code>{
+  "eventType": "START | RUNNING | COMPLETE | FAIL | ABORT",
+  "job": {
+    "namespace": "my_pipeline",
+    "name": "etl_users_daily"
+  },
+  "run": {
+    "runId": "uuid-...",
+    "startedAt": ...,
+    "endedAt": ...
+  },
+  "inputs":  [ {"namespace":"pg","name":"raw.users"} ],   # 上游
+  "outputs": [ {"namespace":"pg","name":"dw.dim_users"} ] # 下游
+}</code></pre>
+
+<table>
+  <thead><tr><th>字段</th><th>含义</th></tr></thead>
+  <tbody>
+    <tr><td><code>job</code></td><td>谁做的(job 名 + namespace)</td></tr>
+    <tr><td><code>run</code></td><td>具体某次执行(runId + 时间)</td></tr>
+    <tr><td><code>inputs</code></td><td>读了哪些数据集(上游)</td></tr>
+    <tr><td><code>outputs</code></td><td>写了哪些数据集(下游)</td></tr>
+    <tr><td><code>eventType</code></td><td>事件状态(START/RUNNING/COMPLETE/FAIL)</td></tr>
+  </tbody>
+</table>
+
+<h3>Marquez 是参考实现</h3>
+
+<p>
+<a href="https://marquezproject.github.io/marquez/" target="_blank" rel="noopener">Marquez</a> 是 OpenLineage 的<strong>参考后端</strong>(WeWork 起源,Apache 2.0):它接收 OpenLineage 事件、存储、提供 Web UI + REST API。本课用它跑通端到端。
+</p>
+
+<table>
+  <thead><tr><th>OpenLineage vs Marquez</th><th>关系</th></tr></thead>
+  <tbody>
+    <tr><td>OpenLineage</td><td><strong>协议</strong>(事件格式 + 传输)</td></tr>
+    <tr><td>Marquez</td><td><strong>后端实现</strong>(接收 + 存储 + UI)</td></tr>
+    <tr><td>DataHub / OpenMetadata</td><td>也支持 OpenLineage(但功能更广)</td></tr>
+  </tbody>
+</table>
+
+<div class="callout">
+  <div class="label">为什么先学 Marquez 不直接学 DataHub 接 OpenLineage</div>
+  <p style="margin:0;">
+  Marquez <strong>专门做血缘</strong>,UI 聚焦、轻量、上手快;DataHub 是<strong>完整目录</strong>,血缘只是它一个标签。学血缘概念,用 Marquez 更清晰;落地到生产,通常会回到 DataHub / OpenMetadata(它们都支持 OpenLineage 协议,迁移成本低)。
+  </p>
+</div>
+
+<!-- ====================================================== -->
+<h2 id="marquez-quickstart">3. 本地起 Marquez(10 分钟)</h2>
+
+<pre><code># Marquez 官方提供的 docker-compose,一条命令
+mkdir ~/marquez && cd ~/marquez
+curl -LO https://raw.githubusercontent.com/MarquezProject/marquez/main/docker/docker-compose.yml
+docker compose up -d
+
+# 验证:
+# - Marquez API:  http://localhost:5000
+# - Marquez Web UI: http://localhost:3000  (浏览器打开这个)</code></pre>
+
+<p>打开 http://localhost:3000,目前是空的(没采集任何事件)。下一步灌入。</p>
+
+<div class="callout warn">
+  <div class="label">⚠ 端口冲突</div>
+  <p style="margin:0;">
+  Marquez Web UI 用 <strong>3000</strong>(有时会和 Node 开发服务器冲突)、API 用 <strong>5000</strong>(有时和 macOS 控制中心冲突)。如果起不来,改 <code>docker-compose.yml</code> 里的端口映射。
+  </p>
+</div>
+
+<!-- ====================================================== -->
+<h2 id="hands-on">4. 用 Python 发送血缘事件(25 分钟)</h2>
+
+<p>
+下面这个脚本<strong>不需要任何 ETL 框架</strong>,直接用 <code>openlineage-python</code> 把一个"ETL 任务"的血缘事件发到 Marquez。这让你理解 OpenLineage 的<strong>协议本身</strong>,而不是某个框架的封装。
+</p>
+
+<pre><code># 安装
+python3 -m venv ~/lineage-venv && source ~/lineage-venv/bin/activate
+pip install openlineage-python</code></pre>
+
+<pre><code>"""lineage_demo.py — 手动发 OpenLineage 事件到 Marquez(2026 验证)"""
+from openlineage.client import OpenLineageClient
+from openlineage.client.run import (
+    Run, Job, RunEvent, RunState,
+    Dataset, InputDataset, OutputDataset,
+)
+import uuid
+from datetime import datetime, timezone
+
+# 1. 连到 Marquez
+client = OpenLineageClient(url="http://localhost:5000")
+
+# 2. 定义一个 ETL 任务:从 raw.users 加工到 dw.dim_users
+run_id = str(uuid.uuid4())
+job = Job(namespace="my_pipeline", name="etl_users_daily")
+
+inputs = [InputDataset(
+    namespace="postgres://prod",
+    name="public.raw_users",
+)]
+outputs = [OutputDataset(
+    namespace="postgres://prod",
+    name="public.dim_users",
+)]
+
+# 3. 发 START 事件(任务开始)
+client.emit(RunEvent(
+    eventType=RunState.START,
+    eventTime=datetime.now(timezone.utc).isoformat(),
+    run=Run(runId=run_id),
+    job=job,
+    inputs=inputs,
+    outputs=outputs,
+    producer="learn-data-govern/lineage_demo",
+))
+
+# 4. ... 实际 ETL 在这里跑(读 raw_users,写 dim_users)...
+
+# 5. 发 COMPLETE 事件(任务完成)
+client.emit(RunEvent(
+    eventType=RunState.COMPLETE,
+    eventTime=datetime.now(timezone.utc).isoformat(),
+    run=Run(runId=run_id),
+    job=job,
+    inputs=inputs,
+    outputs=outputs,
+    producer="learn-data-govern/lineage_demo",
+))
+
+print("✅ 血缘事件已发送,回 http://localhost:3000 查看")</code></pre>
+
+<p>跑完后回 Marquez UI,你会看到:</p>
+
+<ul>
+  <li>左栏多了一个 namespace <code>my_pipeline</code></li>
+  <li>里面有 job <code>etl_users_daily</code></li>
+  <li>点开能看到 <strong>input: raw_users → output: dim_users</strong> 的血缘图</li>
+  <li>Runs 标签看到 START 和 COMPLETE 两次事件</li>
+</ul>
+
+<h3>扩展:多步 ETL 形成链</h3>
+
+<p>
+把脚本复制三份,改成不同的 job 名,让它们形成链:<code>raw_users → dim_users → mart_user_metrics → bi_dashboard</code>。每跑一次,Marquez UI 上的血缘 DAG 就延长一段。这就是<strong>真实数仓的血缘积累过程</strong>。
+</p>
+
+<div class="quiz" data-correct="c">
+  <div class="q">Q2 · OpenLineage 与 Marquez 的关系是?</div>
+  <ul>
+    <li data-k="a">两者是同一工具的不同名称</li>
+    <li data-k="b">Marquez 是协议,OpenLineage 是实现</li>
+    <li data-k="c">OpenLineage 是协议,Marquez 是实现</li>
+    <li data-k="d">两者无关系,纯巧合命名</li>
+  </ul>
+  <div class="reveal">
+  <strong>答案:C</strong>。OpenLineage 是<strong>协议/标准</strong>(定义事件格式);Marquez 是这个协议的<strong>参考实现</strong>(接收存储 + UI)。这是开放生态常见模式:标准先行(LF AI & Data 托管),实现可换(Marquez / DataHub / OpenMetadata 都支持 OpenLineage 协议)。B 反了;A 是把协议和实现混为一谈;D 完全错(两者紧密关联)。
+  </div>
+</div>
+
+<!-- ====================================================== -->
+<h2 id="real-etl">5. 真实场景:框架集成(10 分钟)</h2>
+
+<p>生产中你不会手写事件,而是用<strong>框架封装好的 OpenLineage 集成</strong>:</p>
+
+<table>
+  <thead><tr><th>框架</th><th>集成方式</th><th>采集粒度</th></tr></thead>
+  <tbody>
+    <tr><td><strong>Airflow</strong></td><td>装 <code>airflow-openlineage-backend</code>,自动采集所有任务</td><td>表级 + 操作级</td></tr>
+    <tr><td><strong>dbt</strong></td><td>配置 <code>env: OPENLINEAGE_URL</code>,dbt 自动上报</td><td>表级 + 列级(SQL 解析)</td></tr>
+    <tr><td><strong>Spark</strong></td><td>加 <code>spark-openlineage</code> listener</td><td>表级 + 操作级</td></tr>
+    <tr><td><strong>Snowflake</strong></td><td>原生支持(配置即可)</td><td>表级 + 列级</td></tr>
+    <tr><td><strong>Flink</strong></td><td>Flink OpenLineage connector</td><td>表级 + 操作级</td></tr>
+  </tbody>
+</table>
+
+<div class="callout">
+  <div class="label">推荐落地顺序</div>
+  <p style="margin:0;">
+  <strong>dbt → Spark → Airflow</strong>。原因:dbt 的 SQL 解析能给到<strong>列级血缘</strong>(最值钱),且配置最简单(env var);Spark 覆盖大数据处理;Airflow 最后,因为它<strong>不直接知道数据流向</strong>,只能靠 operators 解析(粒度粗)。如果你的 ETL 主要在 dbt,先接 dbt 收益最大。
+  </p>
+</div>
+
+<div class="exercise">
+  <h3>练习 6.1 · 自己场景的血缘采集计划 <span class="badge">10 min</span></h3>
+  <p>新建 <code>deliverables/lineage-plan-v0.1.md</code>。基于 L01 的项目场景,列出<strong>要接入血缘采集的 3 个 job</strong>:</p>
+  <pre><code># 血缘采集计划 v0.1
+
+## 接入优先级
+
+| 序 | job 名                  | 框架      | 主要 input → output              | 集成方式                  | 优先级 |
+|---:|------------------------|----------|----------------------------------|--------------------------|:-----:|
+|  1 | dbt: fct_user_metrics  | dbt      | dim_users → fct_user_metrics     | OPENLINEAGE_URL env var  | P0    |
+|  2 | spark: agg_user_daily  | Spark    | events_raw → agg_user_daily      | spark-openlineage listener | P0  |
+|  3 | airflow: refresh_bi    | Airflow  | fct_user_metrics → bi_tableau    | airflow-openlineage-backend | P1  |
+
+## 决策依据
+1. dbt 接入最简单且能拿列级血缘,先做
+2. Spark 是大数据主链路,必须有血缘
+3. Airflow 是总调度,放最后做全局串联
+
+## 预期收益
+- 改 fct_user_metrics 字段前 → 看血缘 → 知道下游 bi_tableau 会爆
+- bi 数字错 → 反向溯源 → 定位是 dbt 模型还是上游 Spark 问题
+
+## 前置
+- Marquez/或直接接 L04 的 DataHub(它支持 OpenLineage 协议)
+- dbt cloud / Spark cluster 的配置权限</code></pre>
+</div>
+
+<div class="quiz" data-correct="b">
+  <div class="q">Q3 · 列级血缘比表级血缘难,主要原因是?</div>
+  <ul>
+    <li data-k="a">字段太多存储不下</li>
+    <li data-k="b">需解析 SQL 推导列依赖</li>
+    <li data-k="c">UI 画不出来</li>
+    <li data-k="d">协议不支持</li>
+  </ul>
+  <div class="reveal">
+  <strong>答案:B</strong>。列级血缘需要<strong>解析 SQL</strong>,理解 SELECT/JOIN/WHERE 中列与列的依赖关系(如 <code>SELECT a+b AS c</code> → c 依赖 a 和 b)。SQL 解析易错(子查询、CTE、UDF、动态 SQL),这是技术难点。A 错(字段多不是问题);C 错(UI 能画);D 错(OpenLineage 支持 datasets 的 facets 可表达列级)。这就是为什么 dbt(有完整 SQL AST)能提供高质量列级血缘,而 Airflow(只知任务名)只能给表级。
+  </div>
+</div>
+
+<!-- ====================================================== -->
+<hr class="sep">
+
+<h2 id="recap">本课要点回顾</h2>
+
+<ol>
+  <li><strong>血缘 = 可追溯性的工程化</strong>:影响分析、根因定位、合规审计三大场景。</li>
+  <li><strong>三个层次</strong>:表级(简单,80% 场景)/ 列级(最值钱,需 SQL 解析)/ 操作级(谁在何时跑了)。</li>
+  <li><strong>OpenLineage 是协议,Marquez 是参考实现</strong>:DataHub / OpenMetadata 也支持该协议。</li>
+  <li><strong>事件五要素</strong>:job / run / inputs / outputs / eventType。</li>
+  <li><strong>框架集成比手写好</strong>:dbt 最易接入(给列级血缘),Airflow 最粗(只给表级)。</li>
+  <li><strong>落地顺序:dbt → Spark → Airflow</strong>:收益从高到低。</li>
+</ol>
+
+<h2 id="primary-source">推荐一手阅读</h2>
+
+<p>
+<strong>本课主源 1</strong>:<a href="https://openlineage.io/" target="_blank" rel="noopener">OpenLineage 官方站点</a>。标准、规范、集成清单都在这。
+</p>
+
+<p>
+<strong>本课主源 2</strong>:<a href="https://marquezproject.github.io/marquez/" target="_blank" rel="noopener">Marquez 官方文档</a>。API、Python SDK、docker-compose 都在这。
+</p>
+
+<p>
+<strong>深入 SQL 解析</strong>:<a href="https://docs.getdbt.com/docs/collaborate-govern/about-model-governance#what-is-lineage" target="_blank" rel="noopener">dbt lineage 文档</a>。理解 dbt 如何从 SQL AST 生成列级血缘。
+</p>
+
+<h2 id="next">下一课预告</h2>
+
+<p>
+<strong>第 07 课 · 分类分级 + 合规:PIPL + 数据安全法</strong>。
+技术三连学完了:目录(L04)+ 质量(L05)+ 血缘(L06)。但 DCMM 自评里"数据安全"通常是最短板 —— 本课把合规(个人信息保护法、数据安全法、分类分级)翻译成<strong>具体的工程动作</strong>:字段怎么标、脱敏怎么做、PIA 何时必须做、出境怎么走流程。
+</p>
+
+<div class="ask-teacher">
+<strong>有疑问就问老师(我)</strong>。卡点比如:Marquez 起不来贴 <code>docker compose logs</code>、Python 脚本报错贴 traceback、不知道你的 ETL 该选哪个框架集成、列级血缘怎么搞。技术课贴日志就对了。
+</div>
+
+</main>
+
+<footer class="lesson">
+  <div>
+    <a href="../../index.html">总览</a> ·
+    <a href="0005-data-quality-gx.html">← L05</a> ·
+    <a href="#">L07 合规 →</a>
+  </div>
+  <div>Lesson 06 · Data Lineage (OpenLineage / Marquez PoC)</div>
+</footer>
+
+</body>
+</html>
