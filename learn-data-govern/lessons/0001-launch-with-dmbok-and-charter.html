@@ -1,0 +1,358 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="theme-color" content="#fefefe" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#1a1814" media="(prefers-color-scheme: dark)">
+<meta name="description" content="数据治理课程第 01 课:用 DMBOK 给过往经验画地图,钉死项目场景,写出 Ladley 治理章程骨架 v0.1。">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<title>第 01 课 · 启动数据治理项目:从 DMBOK 坐标到一页章程</title>
+<link rel="stylesheet" href="../assets/course.css">
+<script src="../assets/quiz.js" defer></script>
+</head>
+<body>
+
+<header class="lesson">
+  <div class="crumb">
+    <a href="../MISSION.md">Mission</a> ·
+    <a href="../RESOURCES.md">Resources</a> ·
+    <a href="../reference/GLOSSARY.md">Glossary</a> ·
+    Lesson <strong>01</strong> / <em>unreleased</em>
+  </div>
+  <h1>启动数据治理项目 —— 从 DMBOK 坐标到一页章程</h1>
+  <p class="subtitle">把你已经做过的零散治理,升级成一个可交付、可复盘的项目。</p>
+  <div class="meta">
+    节奏:约 60 分钟 · 产出物:DMBOK 自评表 + 项目场景一句话 + 章程骨架 · 适配:有部分治理经验
+  </div>
+</header>
+
+<main>
+
+<p>
+你已经做过一些数据治理动作 —— 可能写过几条标准、配过几个数据质量检查、回答过 "这张报表数据从哪来"。但这些都是<strong>打补丁式</strong>的动作:哪里痛治哪里,治完不留痕,换个人就接不上。
+</p>
+
+<p>
+本门课的目标是让你从"打补丁"升级到"<strong>能负责一个端到端的治理项目</strong>"。第一课我们就做真实项目第一周会做的事:用一张坐标系看清自己站在哪里,把项目场景钉死,写出第一版<strong>治理章程(Charter)</strong>。
+</p>
+
+<div class="deliverable">
+  <div class="label">本课产出物</div>
+  <ol style="margin:0; padding-left:1.3rem;">
+    <li><strong>DMBOK 自评表</strong> —— 标出你过往经验覆盖了 11 个知识区中的哪几个</li>
+    <li><strong>项目场景一句话</strong> —— 锁定整门课要治理的对象(自家公司 or mock)</li>
+    <li><strong>章程骨架 v0.1</strong> —— 一页以内的 Charter,六要素填到位</li>
+  </ol>
+  <p style="margin:0.6rem 0 0; font-size:0.86rem; color:#666;">
+  这三份产出物会随课程累积。最后一课你会有一整套可交付的项目包。
+  </p>
+</div>
+
+<!-- ====================================================== -->
+<h2 id="dmbok-map">1. 用 DMBOK 给自己画一张地图(15 分钟)</h2>
+
+<h3>什么是 DMBOK</h3>
+
+<p>
+<a href="https://dama.org/learning-resources/dama-data-management-body-of-knowledge-dmbok/" target="_blank" rel="noopener">DAMA-DMBOK2</a>(Data Management Body of Knowledge,第 2 版)是 DAMA International 编的<strong>数据管理知识体系</strong>。它把数据管理切成 <strong>11 个知识区</strong>(Knowledge Areas),用一张"轮形图"(DMBOK Wheel)表示。
+</p>
+
+<p>
+关键的视觉事实是:<strong>Data Governance 在轮的中心,不在轮缘</strong>。它不是 11 个并列知识区之一,而是其他十个区的"枢纽(hub)"。
+</p>
+
+<div class="callout">
+  <div class="label">为什么是枢纽</div>
+  <p style="margin:0;">
+  其他十个区(数据质量、元数据、主数据、数据架构、数据安全……)回答的是"<strong>怎么做</strong>":怎么测质量、怎么收元数据、怎么做 MDM。治理回答的是"<strong>谁有权决定怎么做</strong>" —— 决策权与问责制。没有治理这个 hub,其他十区各做各的、互相冲突。
+  </p>
+</div>
+
+<h3>11 个知识区速查</h3>
+
+<p>记忆顺序:1 个 hub + 2 个跨切面 + 8 个执行区。</p>
+
+<table>
+  <thead>
+    <tr><th>角色</th><th>知识区</th><th>一句话</th></tr>
+  </thead>
+  <tbody>
+    <tr><td>枢纽(Hub)</td><td><strong>Data Governance</strong></td><td>定决策权与问责</td></tr>
+    <tr><td>跨切面</td><td>Data Ethics</td><td>数据使用的伦理底线</td></tr>
+    <tr><td>跨切面</td><td>Data Management Organization &amp; Change Management</td><td>治理组织与变革管理</td></tr>
+    <tr><td>执行区</td><td>Data Architecture</td><td>数据架构与建模</td></tr>
+    <tr><td>执行区</td><td>Data Modeling &amp; Design</td><td>逻辑/物理模型设计</td></tr>
+    <tr><td>执行区</td><td>Data Storage &amp; Operations</td><td>存储与运维</td></tr>
+    <tr><td>执行区</td><td>Data Security</td><td>机密性/完整性/可用性</td></tr>
+    <tr><td>执行区</td><td>Data Integration &amp; Interoperability</td><td>集成、ETL、API</td></tr>
+    <tr><td>执行区</td><td>Document &amp; Content Management</td><td>非结构化内容</td></tr>
+    <tr><td>执行区</td><td>Reference &amp; Master Data</td><td>参考数据与主数据</td></tr>
+    <tr><td>执行区</td><td>Data Warehousing &amp; BI</td><td>数仓与商业智能</td></tr>
+    <tr><td>执行区</td><td>Metadata</td><td>描述数据的数据</td></tr>
+    <tr><td>执行区</td><td>Data Quality</td><td>数据符合用途</td></tr>
+  </tbody>
+</table>
+
+<p class="sidenote">
+<strong>为什么先看这张图</strong>:你过去做过的"数据质量检查"触及 DQ 区;"写过标准"触及 Metadata + Governance;"答血缘问题"触及 Metadata + Data Integration。零散治理的本质是<strong>踩到了几个执行区但缺 hub</strong>。本课开始你就站在 hub 上。
+</p>
+
+<div class="exercise">
+  <h3>练习 1.1 · DMBOK 自评表 <span class="badge">5 min</span></h3>
+  <p>新建文件 <code>learning-records/0001-dmbok-self-assessment.md</code>,把下表复制进去,据实勾选。这一步是为后续课定 ZPD —— 不诚实地勾"全懂了"只会让老师教错内容。</p>
+  <pre><code># DMBOK 自评(LR-0001)
+
+| 知识区                | 做过 | 听过没做过 | 没听过 |
+|----------------------|:---:|:---------:|:-----:|
+| Data Governance      |     |           |       |
+| Data Architecture    |     |           |       |
+| Data Modeling        |     |           |       |
+| Data Storage & Ops   |     |           |       |
+| Data Security        |     |           |       |
+| Data Integration     |     |           |       |
+| Document & Content   |     |           |       |
+| Reference & Master   |     |           |       |
+| Data Warehousing & BI|     |           |       |
+| Metadata             |     |           |       |
+| Data Quality         |     |           |       |
+
+## 我做过的代表性治理动作(三件以内)
+1. ...
+2. ...
+3. ...
+
+## 我最想补的三个区
+1. ...
+2. ...
+3. ...</code></pre>
+</div>
+
+<div class="quiz" data-correct="b">
+  <div class="q">Q1 · 治理(Governance)与管理(Management)的根本区别是?</div>
+  <ul>
+    <li data-k="a">治理负责日常执行,管理负责立规</li>
+    <li data-k="b">治理负责立规则,管理负责执行</li>
+    <li data-k="c">两者本质相同,仅用语差异</li>
+    <li data-k="d">治理侧重技术,管理侧重业务</li>
+  </ul>
+  <div class="reveal">
+  <strong>答案:B</strong>。治理 = 立法(决策权 + 问责),管理 = 执行。这个区分是 DMBOK 全书的根。A 是反的;C 抹平了"谁有权决定"这一关键维度;D 把治理矮化成技术工作,恰恰相反 —— 治理首先是组织/政治问题。
+  </div>
+</div>
+
+<div class="quiz" data-correct="b">
+  <div class="q">Q2 · DMBOK 为什么把 Data Governance 放在轮的中心而非平级?</div>
+  <ul>
+    <li data-k="a">历史原因,DAMA 早期就放中心</li>
+    <li data-k="b">治理为其他十区定义规则与问责</li>
+    <li data-k="c">轮形图视觉需要中心,纯排版</li>
+    <li data-k="d">治理最早出现,其他区从它派生</li>
+  </ul>
+  <div class="reveal">
+  <strong>答案:B</strong>。其他十区都回答"怎么做 X",治理回答"谁有权决定怎么做 X"。少了 hub,十区各做各的、互相冲突。A/C/D 都是把制度性事实误读为偶然的排版或时序。
+  </div>
+</div>
+
+<!-- ====================================================== -->
+<h2 id="scenario">2. 钉死项目场景(10 分钟)</h2>
+
+<p>
+零散治理的问题是没有<strong>对象</strong>:你今天看 ods_order 表,明天看 user 表,后天看某个 BI 看板,治理动作散在空中。一个项目必须有<strong>被治理的明确对象</strong>:一个业务域、一条数据链路、一个产品线、或一个组织。
+</p>
+
+<p>本门课的每一课产出物都要落到同一个场景上,所以现在就要钉死。三种合法来源:</p>
+
+<table>
+  <thead><tr><th>来源</th><th>适合谁</th><th>代价</th><th>真实感</th></tr></thead>
+  <tbody>
+    <tr>
+      <td><strong>自家公司真实痛点</strong></td>
+      <td>有治理 mandate、能拿到数据样例的人</td>
+      <td>需脱敏 + 不能公开产出</td>
+      <td>★★★★★</td>
+    </tr>
+    <tr>
+      <td><strong>行业 mock 场景</strong></td>
+      <td>不便暴露公司数据、但熟悉某行业的人</td>
+      <td>需自己设计业务背景</td>
+      <td>★★★</td>
+    </tr>
+    <tr>
+      <td><strong>公开数据集 + 虚构组织</strong></td>
+      <td>只想练技术落地的人</td>
+      <td>缺真实 stakeholder 复杂度</td>
+      <td>★★</td>
+    </tr>
+  </tbody>
+</table>
+
+<div class="callout warn">
+  <div class="label">⚠ 一票否决项</div>
+  <p style="margin:0;">
+  无论选哪种,场景必须能同时撑起<strong>管理侧</strong>(有 Sponsor/Owner 可演)和<strong>技术侧</strong>(有可触达的元数据/数据可练)和<strong>合规侧</strong>(触及 PI 或重要数据)。选太窄(只练 DQ)会让后段课程无的放矢。
+  </p>
+</div>
+
+<div class="exercise">
+  <h3>练习 1.2 · 写出项目场景一句话 <span class="badge">10 min</span></h3>
+  <p>把场景写到 <code>learning-records/0002-project-scenario.md</code>,用这个句式(填空即对):</p>
+  <blockquote style="margin:0.4rem 0;">
+  我将治理 <em>[组织/业务线]</em> 的 <em>[数据域]</em>,
+  因为当前 <em>[一个具体的痛点,带数字或事件]</em>,
+  成功后 <em>[谁]</em> 能 <em>[做到什么具体的事]</em>。
+  </blockquote>
+  <p style="margin-top:0.6rem;"><strong>例</strong>:我将治理 <em>某电商公司"用户增长"业务线</em>的 <em>用户画像与行为事件数据域</em>,因为当前 <em>市场部每月有 3–5 次因为口径不一致而口径对错的返工</em>,成功后 <em>市场分析师</em> 能 <em>自助查询且无需数据团队复核口径</em>。</p>
+  <p style="margin-bottom:0;">这句会出现在你后续每课的产出物文档顶部,作为治理对象锚点。</p>
+</div>
+
+<!-- ====================================================== -->
+<h2 id="charter">3. 写治理章程(Charter)的骨架(25 分钟)</h2>
+
+<h3>章程解决什么问题</h3>
+
+<p>
+治理项目最大的死因不是技术,是<strong>没有授权</strong>。章程(Charter)就是这份授权书 —— 一份一页纸的文件,告诉组织:"这个项目存在、有 Sponsor 背书、决策权在这里、范围在这里、做成什么样算成功"。
+</p>
+
+<blockquote>
+The charter is the document that gives the data governance program the authority to operate.
+<cite>— John Ladley, <em>Data Governance</em> (2nd ed.), Ch. 4</cite>
+</blockquote>
+
+<p class="sidenote">
+Ladley 把章程称为治理项目的"出生证 + 授权书"。没有它,你做的所有事都是<strong>个人行为</strong>,组织不背书,你走了就散。
+</p>
+
+<h3>Ladley 的 Charter 六要素</h3>
+
+<table>
+  <thead><tr><th>#</th><th>要素</th><th>回答什么</th></tr></thead>
+  <tbody>
+    <tr><td>1</td><td><strong>Context / 背景</strong></td><td>为什么是现在?什么痛点了?</td></tr>
+    <tr><td>2</td><td><strong>Vision / 愿景</strong></td><td>3 年后治理成功了是什么样?</td></tr>
+    <tr><td>3</td><td><strong>Mission / 使命</strong></td><td>本阶段(6–12 个月)做什么?</td></tr>
+    <tr><td>4</td><td><strong>Success Metrics / 成功度量</strong></td><td>怎么知道成功了?数字!</td></tr>
+    <tr><td>5</td><td><strong>Organization / 组织</strong></td><td>Sponsor / Owner / Steward / Council 是谁?</td></tr>
+    <tr><td>6</td><td><strong>Scope / 范围</strong></td><td>哪些数据域在范围内?哪些明确不在?</td></tr>
+  </tbody>
+</table>
+
+<div class="callout">
+  <div class="label">成功度量的陷阱</div>
+  <p style="margin:0;">
+  "提升数据质量"不是度量,是愿望。度量必须可观测,如:"Q4 末,<strong>关键报表口径冲突事件 ≤ 1 次/月</strong>(基线:6 次/月)"。第三课我们会专门讲怎么定度量(DCAM/DCMM 的指标体系),这里先写一个<strong>带数字</strong>的草稿即可。
+  </p>
+</div>
+
+<div class="exercise">
+  <h3>练习 1.3 · 写出 Charter 骨架 v0.1 <span class="badge">20 min</span></h3>
+  <p>新建 <code>lessons-output/charter-v0.1.md</code>(在 workspace 任意位置都可以,建议建一个 <code>deliverables/</code> 目录统管产出物)。复制下方模板填空。允许粗糙,允许 "TBD",但<strong>六要素每个都要有</strong>一行。</p>
+  <pre><code># 数据治理章程 v0.1
+
+> 治理对象:[贴练习 1.2 那句项目场景]
+> 起草日期:2026-07-21
+> 起草人:[你]
+
+## 1. 背景(Context)
+为什么是现在:[一个具体痛点/事件/合规压力]
+
+## 2. 愿景(Vision)
+3 年后:[一句话描述治理成功后的组织状态]
+
+## 3. 使命(Mission)
+未来 6–12 个月做什么:[1–3 件事]
+
+## 4. 成功度量(Success Metrics)
+- [指标 1,带数字 + 基线 + 时点]
+- [指标 2,带数字 + 基线 + 时点]
+- [指标 3,带数字 + 基线 + 时点]
+
+## 5. 组织(Organization)
+- 数据赞助人(Sponsor):[名字/角色]
+- 数据所有者(Owner):[名字/角色]
+- 数据管家(Steward):[名字/角色]
+- 数据治理委员会(Council):[谁参与、多久开一次]
+- 数据保管者(Custodian):[技术角色]
+
+## 6. 范围(Scope)
+In scope(明确在范围内):
+- [数据域 1]
+- [数据域 2]
+
+Out of scope(明确不在范围内):
+- [会被误以为在范围内但暂时不碰的东西 1]
+
+---
+v0.1 → v0.2 待办:
+- [ ] 度量指标和 Sponsor 对齐基线
+- [ ] Steward 名单落到具体人
+- [ ] 范围边界画一张数据流草图</code></pre>
+  <p style="margin-bottom:0;">
+  <strong>真实项目里的预期</strong>:章程不是一次写完的。v0.1 是你自己起草,v0.2 是和 Sponsor 对齐后改,v1.0 是 Council 签字版。本课产出 v0.1 即可。
+  </p>
+</div>
+
+<div class="quiz" data-correct="b">
+  <div class="q">Q3 · 数据 Steward(数据管家)的核心职责是?</div>
+  <ul>
+    <li data-k="a">物理存储与运维,等同于 DBA</li>
+    <li data-k="b">对某数据域的质量和定义负责</li>
+    <li data-k="c">制定全部数据规则并强制执行</li>
+    <li data-k="d">审批所有数据访问请求与权限</li>
+  </ul>
+  <div class="reveal">
+  <strong>答案:B</strong>。Steward 是业务/技术侧"对某数据域的质量与定义负实际责任"的角色,治理的最后一公里。A 是 Custodian;C 高估了 Steward 的权力(规则由治理委员会定,Steward 执行/守护);D 通常是 Owner 或专门的安全角色,Steward 只是协作者。
+  </div>
+</div>
+
+<!-- ====================================================== -->
+<hr class="sep">
+
+<h2 id="recap">本课要点回顾</h2>
+
+<ol>
+  <li><strong>零散 vs 项目</strong>:零散治理缺 hub;项目化治理第一步是把 hub 立起来。</li>
+  <li><strong>DMBOK 是坐标系</strong>:11 知识区 + 治理为枢纽。先知道自己站在哪。</li>
+  <li><strong>场景钉死</strong>:一句话定义治理对象,后续所有产出物挂在同一锚点上。</li>
+  <li><strong>章程 = 授权书</strong>:Ladley 六要素,六条都要有,允许 TBD,不允许缺。</li>
+</ol>
+
+<h2 id="primary-source">推荐一手阅读</h2>
+
+<p>
+<strong>本课主源</strong>:<a href="https://shop.elsevier.com/books/data-governance/ladley/978-0-12-815831-9" target="_blank" rel="noopener">John Ladley, <em>Data Governance: How to Design, Deploy, and Sustain an Effective Data Governance Program</em> (2nd ed.), Chapter 4 "The Data Governance Charter"</a>。Ladley 这章比任何博客讲章程都扎实。读它来核对你 v0.1 的六要素写得到不到位。
+</p>
+
+<p>
+<strong>补充</strong>:<a href="https://dama.org/dmbok2r-infographics/" target="_blank" rel="noopener">DAMA-DMBOK2 Infographics</a> 免费图,贴到你的章程附录或汇报材料里很好用。
+</p>
+
+<h2 id="next">下一课预告</h2>
+
+<p>
+<strong>第 02 课 · 运营模型(Operating Model):治理的人怎么排</strong>。
+章程写了"要有 Sponsor/Owner/Steward/Council",但这些人怎么开会、谁拍板、Steward 是全职还是兼职、Council 多久开一次、议程长什么样 —— 这是运营模型。我们会对比三种典型形态:<strong>中央化 / 联邦化 / 非侵入(Seiner)</strong>,并让你为自己的场景选一种。
+</p>
+
+<div class="ask-teacher">
+<strong>有疑问就问老师(我)</strong>。比如:DMBOK 11 区里某一个具体是什么意思?你的项目场景卡在"一句话写不出来"?Charter 的某个要素填不出怎么办?度量怎么定才不是愿望?直接在本对话里问,我会基于你的具体情况改课程或加练习。
+</div>
+
+</main>
+
+<footer class="lesson">
+  <div>
+    <a href="../MISSION.md">Mission</a> ·
+    <a href="../RESOURCES.md">Resources</a> ·
+    <a href="../reference/GLOSSARY.md">Glossary</a> ·
+    <a href="../NOTES.md">Notes</a>
+  </div>
+  <div>
+    Lesson 01 · <a href="#">Next → 02 Operating Model</a>
+  </div>
+</footer>
+
+</body>
+</html>

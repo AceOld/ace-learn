@@ -1,0 +1,22 @@
+# 本仓库只发布可公开内容。个人文件不发布。
+
+# 个人教学文件(本地保留,不 push)
+**/MISSION.md
+**/NOTES.md
+**/learning-records/
+**/deliverables/
+**/lessons-output/
+
+# 编辑器
+.vscode/
+.idea/
+*.swp
+*~
+
+# 系统
+.DS_Store
+Thumbs.db
+
+# 临时
+*.tmp
+*.bak
