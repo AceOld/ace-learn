@@ -1,0 +1,406 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="theme-color" content="#fefefe" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#1a1814" media="(prefers-color-scheme: dark)">
+<meta name="description" content="数据治理第 04 课:用 DataHub 在本地 Docker 起一套数据目录,采集元数据,跑通 PoC。可运行命令。">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<title>第 04 课 · 元数据与目录:DataHub PoC</title>
+<link rel="stylesheet" href="../assets/course.css">
+<script src="../assets/quiz.js" defer></script>
+</head>
+<body>
+
+<header class="lesson">
+  <div class="crumb">
+    <a href="../../index.html">总览</a> ·
+    <a href="0003-maturity-assessment.html">← L03</a> ·
+    Lesson <strong>04</strong>(技术三连 · 1/3)
+  </div>
+  <h1>元数据与目录 —— DataHub PoC</h1>
+  <p class="subtitle">DCMM 自评告诉你"数据标准"是短板。本课用开源工具把短板补起来 —— 在本地起一个可用的数据目录,采集真实元数据。</p>
+  <div class="meta">
+    节奏:约 90 分钟(含 Docker 拉镜像等待)· 产出物:本地 DataHub 实例 + 一份元数据采集 recipe
+  </div>
+</header>
+
+<main>
+
+<div class="callout warn">
+  <div class="label">⚠ 本课硬件要求</div>
+  <p style="margin:0;">
+  DataHub quickstart 起 ~10 个容器(MySQL + Kafka + Zookeeper + Elasticsearch + GMS + frontend 等),<strong>最低 8GB 空闲内存,推荐 16GB</strong>。Elasticsearch 是最常 OOM 的容器。提前关掉其他重型应用。
+  </p>
+</div>
+
+<div class="deliverable">
+  <div class="label">本课产出物</div>
+  <ol style="margin:0; padding-left:1.3rem;">
+    <li><strong>本地 DataHub 实例</strong> —— 跑在 http://localhost:9002</li>
+    <li><strong>demo-data recipe.yml</strong> —— 采集样例元数据的配置文件</li>
+    <li><strong>自己场景的元数据采集计划</strong> —— 列出真实要接的 3 个数据源</li>
+  </ol>
+</div>
+
+<!-- ====================================================== -->
+<h2 id="what-is-catalog">1. 数据目录到底解决什么(10 分钟)</h2>
+
+<p>
+"数据目录"听起来像 90 年代的"数据字典",但两者有本质差异。理解这个差异,你才知道为什么 DCMM 把"数据标准"单独列成一个能力域。
+</p>
+
+<table>
+  <thead><tr><th>维度</th><th>数据字典(老)</th><th>数据目录(新)</th></tr></thead>
+  <tbody>
+    <tr><td>载体</td><td>Excel / Word 文档</td><td>可交互的服务 + API</td></tr>
+    <tr><td>更新</td><td>人工维护,常过期</td><td>自动从源系统采集</td></tr>
+    <tr><td>覆盖</td><td>表名 + 字段注释</td><td>schema + 血缘 + Owner + 术语 + 质量 + 使用统计</td></tr>
+    <tr><td>用法</td><td>打开文档查</td><td>搜索、订阅变更、API 集成</td></tr>
+    <tr><td>谁负责</td><td>某个 DBA/文档员</td><td>分布式 Steward 网络</td></tr>
+  </tbody>
+</table>
+
+<div class="callout">
+  <div class="label">目录 = 元数据的中央枢纽</div>
+  <p style="margin:0;">
+  目录的核心价值不是"存元数据",是<strong>"让元数据流动起来"</strong>:质量工具把 DQ 结果写进来、调度工具把血缘写进来、Steward 把业务定义写进来、消费者通过目录找到数据。目录是 DMBOK "Metadata" 知识区的<strong>工程实现</strong>。
+  </p>
+</div>
+
+<h3>开源目录横评(2026)</h3>
+
+<table>
+  <thead><tr><th>工具</th><th>起源</th><th>特点</th><th>本课选不选</th></tr></thead>
+  <tbody>
+    <tr><td><strong>DataHub</strong></td><td>LinkedIn / Acryl</td><td>功能最全,血缘/术语/Owner 强</td><td><strong>✅ 本课主选</strong></td></tr>
+    <tr><td>OpenMetadata</td><td>Collate</td><td>UI 紧凑、内置 DQ + SLO</td><td>L05 备选</td></tr>
+    <tr><td>Amundsen</td><td>Lyft</td><td>轻量、搜索优先,血缘弱</td><td>✗</td></tr>
+    <tr><td>Marquez</td><td>WeWork</td><td>专注 OpenLineage,不做完整目录</td><td><strong>L06 主选</strong></td></tr>
+    <tr><td>Apache Atlas</td><td>Hortonworks</td><td>Hadoop 系,发版慢(2025-01)</td><td>✗ 不推荐 2026 greenfield</td></tr>
+  </tbody>
+</table>
+
+<div class="quiz" data-correct="b">
+  <div class="q">Q1 · 数据目录与数据字典最本质的差异是?</div>
+  <ul>
+    <li data-k="a">目录用网页,字典用文档</li>
+    <li data-k="b">目录自动采集并流通元数据</li>
+    <li data-k="c">目录收费,字典免费</li>
+    <li data-k="d">目录字段多,字典字段少</li>
+  </ul>
+  <div class="reveal">
+  <strong>答案:B</strong>。载体(网页 vs 文档)只是表象,本质是<strong>元数据的流动方式</strong>:字典靠人工维护(必然过期),目录靠自动采集 + API 流通(实时)。目录让质量、血缘、Owner、业务定义、使用统计<strong>汇聚到一处并互相联动</strong>,这是字典做不到的。A 是表象;C 错(都有开源);D 是结果不是根因。
+  </div>
+</div>
+
+<!-- ====================================================== -->
+<h2 id="quickstart">2. 在本地起 DataHub(20 分钟 + 拉镜像时间)</h2>
+
+<h3>第 1 步:确认 Docker 就绪(2 分钟)</h3>
+
+<pre><code># 1. 确认 docker 命令不需要 sudo(关键!)
+docker info >/dev/null 2>&1 && echo "✅ docker ok" || echo "❌ docker 需要 sudo 或没运行"
+
+# 如果上面报错,先把用户加入 docker 组:
+# sudo usermod -aG docker $USER && newgrp docker
+
+# 2. 确认 compose v2
+docker compose version</code></pre>
+
+<div class="callout warn">
+  <div class="label">⚠ sudo 是头号杀手</div>
+  <p style="margin:0;">
+  DataHub CLI 调 docker 命令时<strong>不传 sudo</strong>。如果你的 docker 需要 sudo 才能跑,quickstart 会失败报"Docker doesn't seem to be running"。先解决用户组问题,再继续。
+  </p>
+</div>
+
+<h3>第 2 步:安装 DataHub CLI(3 分钟)</h3>
+
+<pre><code># 强烈建议用 venv —— DataHub 依赖 pydantic 1.x,会和系统其他包冲突
+python3 -m venv ~/datahub-venv
+source ~/datahub-venv/bin/activate
+
+# 注意:PyPI 上叫 acryl-datahub,不是 datahub(datahub 是另一个无关包!)
+pip install acryl-datahub
+
+# 验证
+datahub version</code></pre>
+
+<p class="sidenote">
+<strong>坑</strong>:包名是 <code>acryl-datahub</code>,但安装后命令是 <code>datahub</code>。很多博客写 <code>pip install datahub</code> —— 那是另一个完全无关的项目。
+</p>
+
+<h3>第 3 步:启动整套服务(5 分钟 + 拉镜像)</h3>
+
+<pre><code># 一条命令拉起所有服务(MySQL/Kafka/ES/GMS/Frontend/...约 10 个容器)
+datahub docker quickstart
+
+# 首次会拉几个 GB 镜像,耐心等。后续启动快。
+# 启动过程中另开一个终端窗口查看状态:
+datahub docker info</code></pre>
+
+<h3>第 4 步:访问 UI(2 分钟)</h3>
+
+<table>
+  <thead><tr><th>项</th><th>值</th></tr></thead>
+  <tbody>
+    <tr><td>URL</td><td><a href="http://localhost:9002" target="_blank" rel="noopener">http://localhost:9002</a></td></tr>
+    <tr><td>用户名</td><td><code>datahub</code></td></tr>
+    <tr><td>密码</td><td><code>datahub</code></td></tr>
+    <tr><td>REST API(采集元数据用)</td><td>http://localhost:8080</td></tr>
+  </tbody>
+</table>
+
+<p>登录后先看到空搜索结果(<strong>正常,还没采集任何元数据</strong>)。下一步灌入数据。</p>
+
+<!-- ====================================================== -->
+<h2 id="ingest">3. 采集第一份元数据(20 分钟)</h2>
+
+<h3>用 demo-data 源(最简,零外部依赖)</h3>
+
+<p>
+demo-data 是 DataHub 内置的<strong>样例数据包</strong>,包含几十张表、几个 dashboard、术语表节点、示例用户、血缘边。零外部依赖,用来演示完整流程最合适。
+</p>
+
+<pre><code># 创建 recipe 文件
+cat > demo_recipe.yml <<'EOF'
+source:
+  type: demo-data
+  config:
+    pack_name: bootstrap
+
+sink:
+  type: datahub-rest
+  config:
+    server: http://localhost:8080
+EOF
+
+# 执行采集
+datahub ingest -c demo_recipe.yml</code></pre>
+
+<p>预期输出末尾:</p>
+<pre><code>... FINISHED: ...
+- Wrote 86 Events
+- Coverage: 100.00%
+- Connectors ... 1
+- Sources ... 1</code></pre>
+
+<p>看到 "100.00% Coverage" 即成功。回 UI 刷新,看到几十张数据集。</p>
+
+<h3>UI 三大功能走一遍(在浏览器里点)</h3>
+
+<table>
+  <thead><tr><th>功能</th><th>在哪</th><th>看什么</th></tr></thead>
+  <tbody>
+    <tr>
+      <td><strong>数据集 + Schema</strong></td>
+      <td>顶部 Search → 筛选 Dataset → 打开任一表</td>
+      <td>字段名、类型、描述、Owner</td>
+    </tr>
+    <tr>
+      <td><strong>血缘 Lineage</strong></td>
+      <td>表详情页 → Lineage 标签</td>
+      <td>上下游表的 DAG(本课高光时刻)</td>
+    </tr>
+    <tr>
+      <td><strong>术语表 Glossary</strong></td>
+      <td>左侧 Govern → Glossary</td>
+      <td>业务术语定义,可挂到字段上</td>
+    </tr>
+    <tr>
+      <td><strong>Owner 设置</strong></td>
+      <td>表详情页 → Owners</td>
+      <td>为表指定 Steward/Owner</td>
+    </tr>
+  </tbody>
+</table>
+
+<div class="quiz" data-correct="c">
+  <div class="q">Q2 · 在 DataHub 中,采集元数据的配置文件叫什么?</div>
+  <ul>
+    <li data-k="a">Connector</li>
+    <li data-k="b">Pipeline</li>
+    <li data-k="c">Recipe</li>
+    <li data-k="d">Manifest</li>
+  </ul>
+  <div class="reveal">
+  <strong>答案:C</strong>。DataHub 把 source + sink 配置叫 <strong>Recipe</strong>(YAML 格式),用 <code>datahub ingest -c recipe.yml</code> 执行。A 是 source 类型(如 demo-data、postgres、snowflake 都是 connector);B 是通用词不是 DataHub 术语;D 是 dbt 的概念(完全不同的工具链)。
+  </div>
+</div>
+
+<!-- ====================================================== -->
+<h2 id="real-source">4. 接真实数据源(15 分钟)</h2>
+
+<p>
+demo-data 是演示用的。真实场景你要接的是 Postgres / MySQL / dbt / Kafka / Snowflake 等真实源。这里以 Postgres 为例(很多公司有 Postgres),其他源模式一样。
+</p>
+
+<pre><code># 1. 安装 postgres connector 扩展
+pip install 'acryl-datahub[postgres]'
+
+# 2. 写真实 recipe
+cat > postgres_recipe.yml <<'EOF'
+source:
+  type: postgres
+  config:
+    host_port: your-db-host:5432
+    database: your_db
+    username: readonly_user
+    password: ${PG_PASSWORD}      # 从环境变量取,不要写明文
+    # 可选:只采某些 schema
+    schema_pattern:
+      allow: ["public", "analytics"]
+
+sink:
+  type: datahub-rest
+  config:
+    server: http://localhost:8080
+EOF
+
+# 3. 设置密码环境变量后执行
+export PG_PASSWORD='...'
+datahub ingest -c postgres_recipe.yml</code></pre>
+
+<div class="callout warn">
+  <div class="label">⚠ 元数据采集 ≠ 数据访问</div>
+  <p style="margin:0;">
+  采集元数据只需要<strong>只读权限</strong>到 information_schema。绝不要用读写账号!给采集账号单独建一个 <code>readonly_user</code>,只授予 <code>USAGE</code> + <code>SELECT</code> on information_schema。<strong>目录不应该有读取真实数据的能力</strong> —— 这是 L07 合规课会强调的安全边界。
+  </p>
+</div>
+
+<div class="exercise">
+  <h3>练习 4.1 · 列出你的真实采集计划 <span class="badge">10 min</span></h3>
+  <p>新建 <code>deliverables/catalog-source-plan-v0.1.md</code>。基于你 L01 钉死的项目场景,列出<strong>真实要接的 3 个数据源</strong>:</p>
+  <pre><code># 数据目录采集计划 v0.1
+
+## 优先采集的 3 个源
+| 序 | 源类型         | 主机/位置         | 覆盖业务域      | 采集账号      | 优先级 |
+|---:|---------------|------------------|----------------|--------------|:-----:|
+|  1 | postgres      | prod-db:5432     | 用户画像        | ro_catalog   | P0    |
+|  2 | dbt           | dbt cloud / 本地  | 数仓模型        | api_token    | P0    |
+|  3 | kafka         | kafka-broker:9092 | 行为事件        | ro_consumer  | P1    |
+
+## 决策依据
+1. 为什么是这 3 个:[L01 场景里最痛的"口径不一致"在这 3 个源里发生]
+2. 为什么不是别的:[业务侧 BI 看板暂不接入,因为上层依赖 P0 三源完成]
+
+## 风险/前置
+- [PG 只读账号需要 DBA 审批,预计 1 周]
+- [dbt cloud token 需要数据团队 owner 授权]
+
+## 上线节奏
+- W1: demo-data 跑通,Steward 培训
+- W2-3: P0 三源接入,owner 标注
+- W4+: P1 接入,术语表搭建</code></pre>
+</div>
+
+<!-- ====================================================== -->
+<h2 id="common-issues">5. 常见问题与排障(5 分钟)</h2>
+
+<table>
+  <thead><tr><th>症状</th><th>原因</th><th>解决</th></tr></thead>
+  <tbody>
+    <tr>
+      <td><code>datahub docker quickstart</code> 报 "Docker doesn't seem to be running"</td>
+      <td>docker 需要 sudo</td>
+      <td><code>sudo usermod -aG docker $USER && newgrp docker</code></td>
+    </tr>
+    <tr>
+      <td>Elasticsearch 容器反复重启</td>
+      <td>内存不足(8GB 是下限)</td>
+      <td>关掉其他重型应用;或给 Docker 分配 ≥12GB</td>
+    </tr>
+    <tr>
+      <td>UI 9002 打不开但 <code>docker ps</code> 显示 frontend 在跑</td>
+      <td>GMS 还在初始化</td>
+      <td>等 <code>datahub docker info</code> 显示 GMS healthy,通常 3-8 分钟</td>
+    </tr>
+    <tr>
+      <td><code>ingest</code> 报版本不匹配</td>
+      <td>CLI 与镜像版本漂移</td>
+      <td><code>pip install --upgrade acryl-datahub</code></td>
+    </tr>
+    <tr>
+      <td>pydantic 错误</td>
+      <td>系统 Python 装了 pydantic 2</td>
+      <td>必须用 venv(已强调);<code>pip install pydantic==1.10.x</code></td>
+    </tr>
+  </tbody>
+</table>
+
+<h3>停服与清理</h3>
+
+<pre><code># 临时停(保留数据卷,下次启动恢复)
+datahub docker quickstart --stop
+
+# 彻底清空(删容器 + 数据卷 + ES 索引,回到初始状态)
+datahub docker nuke
+# 慎用!会丢失所有已采集的元数据</code></pre>
+
+<div class="quiz" data-correct="b">
+  <div class="q">Q3 · 元数据采集账号应该用什么权限?</div>
+  <ul>
+    <li data-k="a">DBA 全权限,方便诊断</li>
+    <li data-k="b">只读 information_schema</li>
+    <li data-k="c">读写业务表权限</li>
+    <li data-k="d">不需要账号,匿名即可</li>
+  </ul>
+  <div class="reveal">
+  <strong>答案:B</strong>。目录只需读 <code>information_schema</code>(表/列/类型/注释),<strong>不应该有读真实数据的能力</strong>。这是合规边界(L07 课会详讲):一旦目录账号能 SELECT 真实业务数据,目录本身就成了攻击面。A 是过度授权(灾难);C 错(目录不需要看真实数据);D 不可能(任何 DB 都要账号)。<strong>原则:工具按需授权,最小权限</strong>。
+  </div>
+</div>
+
+<!-- ====================================================== -->
+<hr class="sep">
+
+<h2 id="recap">本课要点回顾</h2>
+
+<ol>
+  <li><strong>数据目录 ≠ 数据字典</strong>:目录的核心是<strong>元数据流动</strong>(自动采集 + API 集成),字典是静态文档。</li>
+  <li><strong>DataHub 是 2026 默认选型</strong>:Apache Atlas 节奏慢不推荐 greenfield。</li>
+  <li><strong>包名 <code>acryl-datahub</code>,命令 <code>datahub</code></strong>:不要装错包。</li>
+  <li><strong>用 venv 隔离</strong>:DataHub 依赖 pydantic 1.x,会和系统包冲突。</li>
+  <li><strong>采集账号最小权限</strong>:只读 information_schema,不能碰真实数据。</li>
+  <li><strong>Recipe 是核心抽象</strong>:source + sink 配置,一行命令跑采集。</li>
+</ol>
+
+<h2 id="primary-source">推荐一手阅读</h2>
+
+<p>
+<strong>本课主源</strong>:<a href="https://docs.datahub.com/docs/quickstart" target="_blank" rel="noopener">DataHub 官方 Quickstart(2026 最新)</a>。命令和 UI 操作以官方文档为准(版本会变,博客会过时)。
+</p>
+
+<p>
+<strong>Recipe 参考</strong>:<a href="https://docs.datahub.com/docs/metadata-ingestion/recipe_overview" target="_blank" rel="noopener">官方 Recipe 文档</a>。所有源(MySQL/Postgres/Snowflake/dbt/Kafka/...)的 recipe 模板都在这。
+</p>
+
+<p>
+<strong>架构理解</strong>:<a href="https://docs.datahub.com/docs/architecture/architecture" target="_blank" rel="noopener">DataHub 架构文档</a>。理解 GMS / Frontend / Elasticsearch / Kafka 各自角色,出问题能定位。
+</p>
+
+<h2 id="next">下一课预告</h2>
+
+<p>
+<strong>第 05 课 · 数据质量:Great Expectations PoC</strong>。
+目录告诉你"数据长什么样",但"数据好不好"需要 DQ 工具。我们用 <strong>Great Expectations</strong> 给 L04 采集的表配 10 条"期望"(expectations),生成可读的 DQ 报告。会涉及 DMBOK "Data Quality" 知识区的核心概念:质量维度、规则、profile。<strong>同样给可运行代码</strong>。
+</p>
+
+<div class="ask-teacher">
+<strong>有疑问就问老师(我)</strong>。卡点比如:Docker 起不来贴 <code>docker ps</code> 输出给我、ingest 报错贴日志、不知道你的源该选哪个 connector、内存不够想跑轻量版。本课是技术实战,具体卡点一定要贴出来。
+</div>
+
+</main>
+
+<footer class="lesson">
+  <div>
+    <a href="../../index.html">总览</a> ·
+    <a href="0003-maturity-assessment.html">← L03</a> ·
+    <a href="#">L05 数据质量 →</a>
+  </div>
+  <div>Lesson 04 · Metadata Catalog (DataHub PoC)</div>
+</footer>
+
+</body>
+</html>
