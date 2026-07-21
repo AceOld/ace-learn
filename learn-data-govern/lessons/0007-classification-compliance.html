@@ -1,0 +1,397 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="theme-color" content="#fefefe" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#1a1814" media="(prefers-color-scheme: dark)">
+<meta name="description" content="数据治理第 07 课:把 PIPL、数据安全法、分类分级翻译成具体的工程动作。带条文引用和字段级实操。">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<title>第 07 课 · 分类分级 + 合规:PIPL + 数据安全法</title>
+<link rel="stylesheet" href="../assets/course.css">
+<script src="../assets/quiz.js" defer></script>
+</head>
+<body>
+
+<header class="lesson">
+  <div class="crumb">
+    <a href="../../index.html">总览</a> ·
+    <a href="0006-data-lineage.html">← L06</a> ·
+    Lesson <strong>07</strong>
+  </div>
+  <h1>分类分级 + 合规 —— PIPL + 数据安全法</h1>
+  <p class="subtitle">技术三连学完(目录/质量/血缘),但 DCMM 自评里"数据安全"通常是最短板。本课把合规条文翻译成工程动作。</p>
+  <div class="meta">
+    节奏:约 90 分钟 · 产出物:字段级分类分级表 + 合规动作清单 + PIA 触发判断表
+  </div>
+</header>
+
+<main>
+
+<div class="callout warn">
+  <div class="label">⚠ 重要诚实声明</div>
+  <p style="margin:0;">
+  本课是<strong>面向工程师的合规翻译</strong>,不是法律意见。具体合规决策请咨询法务/合规团队。<strong>本课的核心价值是让你能和法务对话</strong>,知道哪些动作是硬要求、哪些是工程选择。
+  </p>
+</div>
+
+<div class="deliverable">
+  <div class="label">本课产出物</div>
+  <ol style="margin:0; padding-left:1.3rem;">
+    <li><strong>字段级分类分级表</strong> —— 你场景的关键表,每个字段标敏感级</li>
+    <li><strong>合规动作清单</strong> —— 哪些动作是 PIPL/DSL 强制,哪些是工程选择</li>
+    <li><strong>PIA 触发判断表</strong> —— 何时必须做事前影响评估</li>
+  </ol>
+</div>
+
+<!-- ====================================================== -->
+<h2 id="three-laws">1. 三部法律的关系(10 分钟)</h2>
+
+<p>
+中国数据合规体系是<strong>三法一标准</strong>的格局。理解它们各自管什么,才能知道哪个动作归哪部法。
+</p>
+
+<table>
+  <thead><tr><th>法</th><th>核心管什么</th><th>关键条文</th><th>对工程师的意义</th></tr></thead>
+  <tbody>
+    <tr>
+      <td><strong>网络安全法 CSL</strong><br><small>2017</small></td>
+      <td>网络运行安全、日志留存</td>
+      <td>Art. 21(3)</td>
+      <td>日志至少留 <strong>6 个月</strong>(很多团队的硬要求源头)</td>
+    </tr>
+    <tr>
+      <td><strong>数据安全法 DSL</strong><br><small>2021-09</small></td>
+      <td>数据分类分级、重要/核心数据</td>
+      <td>Art. 21, 30, 31</td>
+      <td><strong>必须做分类分级</strong>,处理重要数据要做风险评估</td>
+    </tr>
+    <tr>
+      <td><strong>个人信息保护法 PIPL</strong><br><small>2021-11</small></td>
+      <td>个人信息处理者义务、PI 处理规则</td>
+      <td>Art. 6, 13, 14, 51, 55</td>
+      <td>最小必要 / 知情同意 / 去标识化 / PIA 触发</td>
+    </tr>
+  </tbody>
+</table>
+
+<div class="callout">
+  <div class="label">一句话区分</div>
+  <p style="margin:0;">
+  <strong>CSL</strong> 管"网络和日志",<strong>DSL</strong> 管"数据分级与重要数据",<strong>PIPL</strong> 管"个人信息和隐私"。三者叠加才完整。很多人混淆"日志 6 个月"出自哪 —— 它是 <strong>CSL Art. 21(3)</strong>,不是 PIPL。
+  </p>
+</div>
+
+<!-- ====================================================== -->
+<h2 id="classification">2. 数据分类分级(DSL 强制)(20 分钟)</h2>
+
+<h3>分级:三级体系(不是"公开/内部/秘密/机密")</h3>
+
+<div class="callout warn">
+  <div class="label">⚠ 最常见的误区</div>
+  <p style="margin:0;">
+  很多企业把数据分成"公开/内部/秘密/机密",以为这就是分类分级。<strong>错</strong>。那是<strong>保密法体系</strong>(保守国家秘密法),主要管国家秘密,与商业数据治理关系不大。DSL 的法定分级是<strong>另一套</strong>。
+  </p>
+</div>
+
+<p>DSL Article 21 确立的<strong>法定三级</strong>:</p>
+
+<table>
+  <thead><tr><th>级</th><th>定义(DSL Art. 21)</th><th>附加义务</th></tr></thead>
+  <tbody>
+    <tr>
+      <td><strong>核心数据</strong></td>
+      <td>关系国家安全、国民经济命脉、重要民生、重大公共利益</td>
+      <td>"实行更加严格的管理制度"(细则由行业监管定)</td>
+    </tr>
+    <tr>
+      <td><strong>重要数据</strong></td>
+      <td>列入各行业/地区发布的<strong>重要数据目录</strong>(DSL Art. 21 ¶3)</td>
+      <td><strong>风险评估 + 上报</strong>(Art. 30)、出境须<strong>安全评估</strong>(Art. 31)</td>
+    </tr>
+    <tr>
+      <td><strong>一般数据</strong></td>
+      <td>上述两者之外的兜底</td>
+      <td>常规保护(参照 GB/T 43697-2024 推荐标准)</td>
+    </tr>
+  </tbody>
+</table>
+
+<p class="sidenote">
+<strong>重要数据目录由谁发布</strong>:不是集中清单,DSL Art. 21 ¶3 规定<strong>各地区/各部门/各行业分别发布</strong>自己的目录。这意味着你必须查<strong>你所在行业</strong>的目录(如汽车、医疗、金融、电信各有不同)。<a href="https://www.tc260.org.cn/upload/2024-03-21/1711023239820042113.pdf" target="_blank" rel="noopener">GB/T 43697-2024 数据分类分级规则</a>是操作性国标。
+</p>
+
+<h3>分类:按维度横向分</h3>
+
+<p>分类(横向)与分级(纵向)是<strong>正交</strong>的。一个数据既有类别(如"用户""订单"),也有等级(如"一般""重要"):</p>
+
+<table>
+  <thead><tr><th>分类(类别)</th><th>分级示例</th></tr></thead>
+  <tbody>
+    <tr><td>用户基本信息(姓名/手机号)</td><td>一般 + 个人信息(受 PIPL 管)</td></tr>
+    <tr><td>用户敏感信息(身份证/生物特征)</td><td>一般 + 个人敏感信息(PIPL 强约束)</td></tr>
+    <tr><td>核心业务算法/定价模型</td><td>可能"重要数据"</td></tr>
+    <tr><td>大规模群体轨迹数据</td><td>可能"重要数据"</td></tr>
+    <tr><td>公开财报数据</td><td>一般数据(非 PI)</td></tr>
+  </tbody>
+</table>
+
+<div class="exercise">
+  <h3>练习 7.1 · 字段级分类分级表 <span class="badge">15 min</span></h3>
+  <p>新建 <code>deliverables/classification-v0.1.md</code>。挑一张含个人信息的表(如 user),逐字段标注:</p>
+  <pre><code># 字段级分类分级表 v0.1
+
+> 表:public.users
+> 业务域:用户画像
+
+| 字段              | 是否 PI | 是否敏感 PI | 数据级 | 控制动作                                |
+|------------------|:-----:|:---------:|:-----:|----------------------------------------|
+| user_id          | 否     | -         | 一般  | 内部可见,导出脱敏                     |
+| nickname         | 是     | 否        | 一般  | 内部可见,日志禁记                     |
+| phone            | 是     | 是        | 一般+ | 加密存储 + 访问审计 + 动态脱敏         |
+| id_card          | 是     | 是        | 一般+ | 加密存储 + 严格 RBAC + 任何访问审批    |
+| email            | 是     | 否        | 一般  | 内部可见,导出脱敏                     |
+| address          | 是     | 是        | 一般+ | 加密 + 字段级权限                      |
+| created_at       | 否     | -         | 一般  | 公开内部                               |
+| ip_address       | 是     | 视场景    | 一般  | 日志保留 6 月(CSL),分析前脱敏       |
+| biometric_data   | 是     | 是        | 重要?| 强烈建议咨询法务;可能触发 PIA         |
+
+## 标注规则
+- 是否 PI:可识别自然人的即 PI(PIPL Art. 73)
+- 敏感 PI:身份证/生物/医疗/金融/14 岁以下儿童信息(PIPL Art. 28)
+- 数据级:多数公司业务数据是"一般",若涉及行业重要数据目录要单独咨询
+
+## 落地配套
+- 加密:手机号/身份证/地址 字段级加密(AES-256)
+- 审计:对敏感 PI 字段的所有 SELECT 写访问日志(留 ≥6 月,CSL Art. 21(3))
+- 脱敏:导出/分析场景强制动态脱敏(只显示后 4 位等)</code></pre>
+</div>
+
+<!-- ====================================================== -->
+<h2 id="pipl-principles">3. PIPL 五大原则 → 工程翻译(20 分钟)</h2>
+
+<p>
+PIPL 的原则不是抽象概念,每条都能翻译成<strong>具体的工程动作</strong>。这是本课最有价值的部分。
+</p>
+
+<table>
+  <thead><tr><th>原则</th><th>条文</th><th>工程翻译</th></tr></thead>
+  <tbody>
+    <tr>
+      <td><strong>明确合理目的</strong></td>
+      <td>Art. 6</td>
+      <td>每个 PI 字段在元数据里挂"用途"(L04 的目录可以做)</td>
+    </tr>
+    <tr>
+      <td><strong>最小必要</strong></td>
+      <td>Art. 6</td>
+      <td>采集 schema 设计必须能 trace 到用途;"先收再说"违规</td>
+    </tr>
+    <tr>
+      <td><strong>目的限制</strong></td>
+      <td>Art. 6, 14(3)</td>
+      <td>用途变更需重新征得同意;数据共享给第三方需单独同意</td>
+    </tr>
+    <tr>
+      <td><strong>知情同意 + 单独同意</strong></td>
+      <td>Art. 13, 14</td>
+      <td>需 <code>consents</code> 表记录每次同意事件(purpose, ts, version, revoke)</td>
+    </tr>
+    <tr>
+      <td><strong>安全保护措施</strong></td>
+      <td>Art. 51</td>
+      <td>加密 / 去标识化 / RBAC / 应急预案 / 培训 七项动作</td>
+    </tr>
+  </tbody>
+</table>
+
+<h3>"去标识化" vs "匿名化" —— 最常被搞错</h3>
+
+<div class="callout warn">
+  <div class="label">⚠ 法律区分(PIPL Art. 73)</div>
+  <p style="margin:0;">
+  PIPL 法定的是<strong>去标识化</strong>,不是 GDPR 的"假名化"(pseudonymization)。两者的法律后果<strong>完全不同</strong>:
+  </p>
+  <ul style="margin-top:0.6rem; margin-bottom:0;">
+    <li><strong>去标识化</strong>:不借助额外信息<strong>无法识别</strong>,但<strong>借助映射表可以还原</strong> → <strong>仍然是 PI,仍受 PIPL 管</strong></li>
+    <li><strong>匿名化</strong>:处理后<strong>无法识别且不能复原</strong> → <strong>不再是 PI,PIPL 不适用</strong></li>
+  </ul>
+</div>
+
+<p>
+<strong>工程含义</strong>:token 化、哈希、掩码(masking)产生的数据<strong>都是"去标识化"而非"匿名化"</strong> —— 只要存在映射表或反查路径,就仍是 PI。这意味着你做的"数据脱敏"通常不能让数据"脱离 PIPL 管辖",只是降低了风险。<strong>真正脱出 PIPL 范围的匿名化</strong>是不可逆的(如聚合、差分隐私),工程上很难。
+</p>
+
+<div class="quiz" data-correct="b">
+  <div class="q">Q1 · 用 token 替换手机号(保留映射表可还原),法律上属于?</div>
+  <ul>
+    <li data-k="a">匿名化,不再受 PIPL 管</li>
+    <li data-k="b">去标识化,仍是 PI</li>
+    <li data-k="c">脱敏,等同于匿名化</li>
+    <li data-k="d">加密,法律未定义</li>
+  </ul>
+  <div class="reveal">
+  <strong>答案:B</strong>。PIPL Art. 73 法定定义:<strong>去标识化</strong>是"不借助额外信息无法识别",但<strong>借助映射表可以还原</strong> → 仍是 PI,受 PIPL 管。Token 化、哈希、掩码产生的数据都是去标识化。<strong>只有不可逆的匿名化</strong>(聚合、差分隐私等)才让数据脱离 PIPL。A/C 是常见误解;D 错(PIPL Art. 73 明确定义了去标识化和匿名化)。这就是为什么"我们脱敏了所以不归 PIPL 管"是错的。
+  </div>
+</div>
+
+<!-- ====================================================== -->
+<h2 id="engineering-translations">4. 工程动作清单(15 分钟)</h2>
+
+<h3>静态脱敏 vs 动态脱敏 —— 是工程选择不是法律强制</h3>
+
+<div class="callout warn">
+  <div class="label">⚠ 纠正一个常见说法</div>
+  <p style="margin:0;">
+  PIPL Art. 51(3) 要求"加密、<strong>去标识化等安全技术措施</strong>",但<strong>没指定静态还是动态脱敏</strong>。这两种是工程选择,不是法律强制。区分来自 GB/T 37988-2019(DSMM)和实践。
+  </p>
+</div>
+
+<table>
+  <thead><tr><th>方式</th><th>原理</th><th>适用</th></tr></thead>
+  <tbody>
+    <tr><td><strong>静态脱敏</strong></td><td>一次性产出脱敏副本,原数据不动</td><td>测试/开发环境、导出分析数据集</td></tr>
+    <tr><td><strong>动态脱敏</strong></td><td>查询时实时脱敏,按角色显示不同视图</td><td>生产环境访问(客服、BI、第三方查询)</td></tr>
+  </tbody>
+</table>
+
+<h3>访问日志留存 —— 不是 PIPL 是 CSL</h3>
+
+<p>"日志保留 6 个月"这条是<strong>网络安全法 Art. 21(3)</strong>,不是 PIPL 或 DSL:</p>
+
+<blockquote>
+采取监测、记录网络运行状态、网络安全事件的技术措施,并按照规定<strong>留存相关的网络日志不少于六个月</strong>。
+<cite>— 网络安全法 第二十一条 第 3 款</cite>
+</blockquote>
+
+<p class="sidenote">
+工程含义:PI 字段的访问日志(SELECT 手机号/身份证 等)<strong>至少留 6 个月</strong>。某些行业(金融/证券)有更长要求,需查行业细则。
+</p>
+
+<h3>七个工程动作总览(对应 PIPL Art. 51)</h3>
+
+<table>
+  <thead><tr><th>动作</th><th>条文</th><th>怎么做</th></tr></thead>
+  <tbody>
+    <tr><td>1. 内部制度</td><td>51(1)</td><td>数据治理章程 + RACI(L01/L02 已做)</td></tr>
+    <tr><td>2. 分类管理</td><td>51(2)</td><td>本课的字段级分类分级表</td></tr>
+    <tr><td>3. 加密/去标识化</td><td>51(3)</td><td>字段级加密 + 脱敏(本节)</td></tr>
+    <tr><td>4. 操作权限</td><td>51(4)</td><td>RBAC + 最小权限 + 字段级权限</td></tr>
+    <tr><td>5. 培训</td><td>51(5)</td><td>Steward 季度培训 + 新员工 onboarding</td></tr>
+    <tr><td>6. 应急预案</td><td>51(6)</td><td>泄露响应 runbook + 演练</td></tr>
+    <tr><td>7. 其他法定</td><td>51(7)</td><td>合规审计 Art. 54 + PIA Art. 55</td></tr>
+  </tbody>
+</table>
+
+<!-- ====================================================== -->
+<h2 id="pia">5. PIA 触发判断(10 分钟)</h2>
+
+<p>
+<strong>个人信息保护影响评估(PIA)</strong>是 PIPL Art. 55 规定的事前评估机制。下面是触发判断表 —— 命中任何一条都<strong>必须事前做 PIA</strong>。
+</p>
+
+<table>
+  <thead><tr><th>触发情形(PIPL Art. 55)</th><th>典型场景</th><th>PIA 报告留多久</th></tr></thead>
+  <tbody>
+    <tr><td>处理<strong>敏感</strong>个人信息</td><td>新功能涉及身份证/生物/位置等</td><td>≥ 3 年(Art. 55 ¶2)</td></tr>
+    <tr><td>利用 PI <strong>自动化决策</strong></td><td>推荐算法、风控模型、个性化定价</td><td>≥ 3 年</td></tr>
+    <tr><td><strong>委托/对外提供/公开</strong> PI</td><td>数据共享给合作方、API 开放</td><td>≥ 3 年</td></tr>
+    <tr><td><strong>境外提供</strong> PI</td><td>跨境数据传输(SaaS、海外业务)</td><td>≥ 3 年</td></tr>
+    <tr><td>其他重大影响活动</td><td>大规模画像、新技术应用</td><td>≥ 3 年</td></tr>
+  </tbody>
+</table>
+
+<div class="callout">
+  <div class="label">工程含义</div>
+  <p style="margin:0;">
+  PIA 是<strong>事前闸门</strong>:触及敏感 PI / 自动化决策 / 对外共享 / 出境 的新功能,<strong>PIA 没做完不能上线</strong>。这条要在 RACI 里写清楚(L02 的 RACI 应该有"上线前合规审查"一行,Owner 是法务/合规,A 是合规)。
+  </p>
+</div>
+
+<div class="quiz" data-correct="c">
+  <div class="q">Q2 · 哪个场景必须事前做 PIA(PIPL Art. 55)?</div>
+  <ul>
+    <li data-k="a">更新内部 BI 看板(无新 PI)</li>
+    <li data-k="b">导出去标识化数据进测试库</li>
+    <li data-k="c">新推荐算法用 PI 做个性化</li>
+    <li data-k="d">修改字段注释</li>
+  </ul>
+  <div class="reveal">
+  <strong>答案:C</strong>。新推荐算法用 PI 做个性化 = <strong>自动化决策</strong>(Art. 55(2)),必须事前 PIA。A 不触发(无新 PI,无敏感处理);B 看上去安全但<strong>委托/对外提供</strong> PI(即便是去标识化数据给第三方)也可能触发 Art. 55(3) —— 但仅导内部测试库不对外时一般不触发;D 不触发。这是上线前最容易漏掉的合规闸门。
+  </div>
+</div>
+
+<!-- ====================================================== -->
+<h2 id="cross-border">6. 数据出境(5 分钟)</h2>
+
+<p>2024-03 起,<a href="https://www.cac.gov.cn/2024-03/22/c_1712776611775634.htm" target="_blank" rel="noopener">《促进和规范数据跨境流动规定》</a>大幅放宽了小规模出境。三条路径:</p>
+
+<table>
+  <thead><tr><th>路径</th><th>何时用</th><th>典型门槛</th></tr></thead>
+  <tbody>
+    <tr><td><strong>安全评估</strong></td><td>CIIO、大规模 PI、重要数据</td><td>累计向 ≥100 万人提供 PI / 敏感 PI ≥1 万人</td></tr>
+    <tr><td><strong>标准合同 SCC</strong></td><td>未触发安全评估的中等规模</td><td>签约后 10 个工作日内备案</td></tr>
+    <tr><td><strong>认证</strong></td><td>跨国企业内部</td><td>证书 3 年有效</td></tr>
+  </tbody>
+</table>
+
+<p class="sidenote">
+<strong>2024 新规的小规模豁免</strong>:年内收集 &lt;100 万人 PI 且对外提供 &lt;10 万人 PI(不含敏感 PI)可免三条路径 —— 这是 SaaS 出海创业的利好。具体数字以官方原文为准。
+</p>
+
+<!-- ====================================================== -->
+<hr class="sep">
+
+<h2 id="recap">本课要点回顾</h2>
+
+<ol>
+  <li><strong>三法分工</strong>:CSL 管网络/日志(6 月留存);DSL 管分级/重要数据;PIPL 管 PI/隐私。</li>
+  <li><strong>分类分级是 DSL 强制</strong>,法定三级:核心/重要/一般。<strong>不是"公开/内部/秘密/机密"</strong>。</li>
+  <li><strong>去标识化 ≠ 匿名化</strong>:前者仍受 PIPL 管,后者不受。Token/哈希/掩码都是去标识化。</li>
+  <li><strong>静态/动态脱敏是工程选择</strong>,不是 PIPL 强制。</li>
+  <li><strong>PIA 是上线前闸门</strong>:敏感 PI / 自动化决策 / 对外提供 / 出境 必须事前做。</li>
+  <li><strong>最小必要 + 目的限制</strong>翻译到 schema:每个 PI 字段在目录里挂"用途"。</li>
+</ol>
+
+<h2 id="primary-source">推荐一手阅读</h2>
+
+<p>
+<strong>本课主源 1</strong>:<a href="https://www.cac.gov.cn/2021-08/20/c_1631050028355286.htm" target="_blank" rel="noopener">PIPL 全文(国家网信办)</a>。条文引用以原文为准,Art. 6/13/14/51/55/73 是核心。
+</p>
+
+<p>
+<strong>本课主源 2</strong>:<a href="https://www.stats.gov.cn/gk/tjfg/xgfxfg/202503/t20250310_1958928.html" target="_blank" rel="noopener">数据安全法全文(gov.cn 镜像)</a>。重点 Art. 21/30/31。
+</p>
+
+<p>
+<strong>操作国标</strong>:<a href="https://www.tc260.org.cn/upload/2024-03-21/1711023239820042113.pdf" target="_blank" rel="noopener">GB/T 43697-2024 数据分类分级规则</a>(TC260 发布)。怎么做分类分级的工程参考。
+</p>
+
+<p>
+<strong>出境新规</strong>:<a href="https://www.cac.gov.cn/2024-03/22/c_1712776611775634.htm" target="_blank" rel="noopener">《促进和规范数据跨境流动规定》(2024-03-22 生效)</a>。
+</p>
+
+<h2 id="next">下一课预告</h2>
+
+<p>
+<strong>第 08 课 · 项目收尾:立项 + 季度复盘 + 交付包</strong>。
+最后一课把前 7 课的产出物<strong>整合成完整的项目交付包</strong>:立项文档(给 Sponsor)、季度复盘模板(给 Council)、个人能力清单(给自己)。学完这一课你就完成了整个 Mission。
+</p>
+
+<div class="ask-teacher">
+<strong>有疑问就问老师(我)</strong>。卡点比如:某个字段拿不准是不是敏感 PI、你的行业有没有重要数据目录(贴你行业我帮你查)、PIA 模板怎么写、出境场景不知道走哪条路径。合规问题没有标准答案,贴具体场景我们拆。
+</div>
+
+</main>
+
+<footer class="lesson">
+  <div>
+    <a href="../../index.html">总览</a> ·
+    <a href="0006-data-lineage.html">← L06</a> ·
+    <a href="#">L08 项目收尾 →</a>
+  </div>
+  <div>Lesson 07 · Classification & Compliance (PIPL + DSL)</div>
+</footer>
+
+</body>
+</html>
