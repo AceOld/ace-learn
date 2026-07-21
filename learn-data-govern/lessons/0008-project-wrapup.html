@@ -1,0 +1,337 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="theme-color" content="#fefefe" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#1a1814" media="(prefers-color-scheme: dark)">
+<meta name="description" content="数据治理第 08 课(终课):整合前 7 课产出物为完整项目交付包,立项文档 + 季度复盘 + 能力清单。">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<title>第 08 课 · 项目收尾:立项 + 复盘 + 交付包(终课)</title>
+<link rel="stylesheet" href="../assets/course.css">
+<script src="../assets/quiz.js" defer></script>
+</head>
+<body>
+
+<header class="lesson">
+  <div class="crumb">
+    <a href="../../index.html">总览</a> ·
+    <a href="0007-classification-compliance.html">← L07</a> ·
+    Lesson <strong>08</strong>(终课)
+  </div>
+  <h1>项目收尾 —— 立项 + 复盘 + 交付包</h1>
+  <p class="subtitle">前 7 课的产出物散在 deliverables/ 里。本课把它们整合成完整项目包,然后回到 Mission,看你做到了什么。</p>
+  <div class="meta">
+    节奏:约 60 分钟 · 产出物:完整项目交付包 + 能力自检
+  </div>
+</header>
+
+<main>
+
+<div class="callout produce">
+  <div class="label">🎓 你做到了</div>
+  <p style="margin:0;">
+  这是最后一课。如果前 7 课你认真做了练习,你现在手里有 <strong>8 份可交付物</strong>,对应 Mission 里"成功标准"的每一条。本课把它们装进一个项目包,并给你一份<strong>给 Sponsor 的立项文档模板</strong>。学完这课,Mission 达成。
+  </p>
+</div>
+
+<div class="deliverable">
+  <div class="label">本课产出物</div>
+  <ol style="margin:0; padding-left:1.3rem;">
+    <li><strong>完整项目交付包</strong> —— 8 份产出物按目录组织</li>
+    <li><strong>立项文档</strong>(给 Sponsor 的 5 页 PPT/word 大纲)</li>
+    <li><strong>季度复盘模板</strong>(给 Council 用)</li>
+    <li><strong>能力自检表</strong>(对 Mission 的"成功标准"逐条勾选)</li>
+  </ol>
+</div>
+
+<!-- ====================================================== -->
+<h2 id="deliverables-map">1. 你手里应该有这些(10 分钟)</h2>
+
+<p>回头看 deliverables/ 目录,你应该累积了下面 8 份产出物。如果少了,这正是回去补的好时机。</p>
+
+<table>
+  <thead><tr><th>#</th><th>产出物</th><th>来自</th><th>回答什么</th></tr></thead>
+  <tbody>
+    <tr><td>1</td><td><code>charter-v0.2.md</code></td><td>L01 → L02 升级</td><td>项目是什么、为什么、谁负责</td></tr>
+    <tr><td>2</td><td><code>raci-matrix-v0.1.md</code></td><td>L02</td><td>10 个治理动作谁拍板</td></tr>
+    <tr><td>3</td><td><code>council-agenda-v0.1.md</code></td><td>L02</td><td>Council 怎么开</td></tr>
+    <tr><td>4</td><td><code>dcmm-self-assessment-v0.1.md</code></td><td>L03</td><td>组织现在在哪里(雷达图)</td></tr>
+    <tr><td>5</td><td><code>improvement-roadmap-v0.1.md</code></td><td>L03</td><td>6–12 月做什么</td></tr>
+    <tr><td>6</td><td><code>catalog-source-plan-v0.1.md</code></td><td>L04</td><td>数据目录接入哪些源</td></tr>
+    <tr><td>7</td><td><code>dq-rules-v0.1.md</code> + <code>lineage-plan-v0.1.md</code></td><td>L05 + L06</td><td>质量规则 + 血缘接入</td></tr>
+    <tr><td>8</td><td><code>classification-v0.1.md</code></td><td>L07</td><td>字段级分类分级 + 合规清单</td></tr>
+  </tbody>
+</table>
+
+<p>把这 8 份文件整理成下面这个目录结构(项目交付包):</p>
+
+<pre><code>data-governance-project/
+├── 00-charter/
+│   └── charter-v1.0.md              # 章程定稿
+├── 01-org/
+│   ├── raci-matrix-v1.0.md
+│   └── council-agenda-template.md
+├── 02-maturity/
+│   ├── dcmm-assessment-v1.0.md      # 雷达图 + 9 域评级
+│   └── roadmap-12mo.md
+├── 03-tech/
+│   ├── catalog-source-plan.md
+│   ├── dq-rules.md
+│   └── lineage-plan.md
+├── 04-compliance/
+│   ├── classification.md
+│   └── compliance-actions.md        # PIA 触发表 + 出境判断
+├── 90-stakeholder/
+│   ├── sponsor-deck.md              # 立项 PPT 大纲
+│   └── quarterly-review-template.md # Council 复盘模板
+└── README.md                        # 项目说明 + 版本历史</code></pre>
+
+<div class="callout">
+  <div class="label">为什么这样组织</div>
+  <p style="margin:0;">
+  <strong>00–04 按 DCMM 九域分组</strong>(管理/组织/战略/技术/安全),<strong>90 给 stakeholder</strong>。这种结构让 Sponsor/法务/Council 能快速找到他们关心的部分。它本身就是治理项目<strong>可移交</strong>的证明 —— 你离开了,下一个人接得上。
+  </p>
+</div>
+
+<!-- ====================================================== -->
+<h2 id="sponsor-deck">2. 立项文档(给 Sponsor)(15 分钟)</h2>
+
+<p>
+Sponsor 不会读 8 份文档。他/她要的是<strong>5 页内的立项材料</strong>,能回答四个问题:现状、目标、要多少钱/人/时间、风险。下面是模板。
+</p>
+
+<div class="exercise">
+  <h3>练习 8.1 · 写立项文档大纲 <span class="badge">15 min</span></h3>
+  <p>新建 <code>data-governance-project/90-stakeholder/sponsor-deck.md</code>。按下面 5 节填(可粗,但要每节都有):</p>
+  <pre><code># 数据治理立项报告(给 Sponsor)
+
+## 1. 现状(1 页)
+- DCMM 自评平均 X.X 级(贴 L03 雷达图)
+- 最短板:[如"数据安全 L1,字段无分类分级"]
+- 业务影响:[具体痛点,带数字,L01 场景那句]
+
+## 2. 目标(1 页)
+- 12 个月内平均提升到 Y.Y 级
+- 合规风险清零(分类分级 + 字段加密完成)
+- 关键业务指标受益:[如"口径冲突事件 6→1/月"]
+
+## 3. 资源需求(1 页)
+- 人力:[X 人月,Steward 兼职 + 1 个治理 owner 半职]
+- 预算:[工具/培训/外部评估 ≈ Y 万]
+- 时间:[6–12 月,关键里程碑 4 个]
+
+## 4. 路线图(1 页,贴 L03 的改进路线)
+- Q1:章程 + 运营模型落地 + DCMM 基线
+- Q2:数据目录 + DQ + 血缘 PoC 上线
+- Q3:分类分级 + 合规闭环
+- Q4:第一次 Council 复盘 + DCMM 复评
+
+## 5. 风险与依赖(1 页)
+- Steward 兼职风险 → 缓解:Sponsor 协调绩效权重
+- 工具学习曲线 → 缓解:W1 培训 + 外部顾问
+- 业务方抵触 → 缓解:非侵入路径(L02)
+
+## 附录
+- 章程 v1.0
+- DCMM 评估表
+- 改进路线详情</code></pre>
+</div>
+
+<!-- ====================================================== -->
+<h2 id="quarterly-review">3. 季度复盘模板(给 Council)(10 分钟)</h2>
+
+<p>
+治理项目最怕"启动后无复盘"。Council 每 3 个月要开一次<strong>季度复盘</strong>,回答三个问题:度量怎么样、卡在哪里、下季度做什么。模板:
+</p>
+
+<pre><code># 季度治理复盘 Q[X] 20[YY]
+
+## 1. 关键度量(15 min)
+| 度量                          | 基线  | 本季 | 目标  | 趋势  |
+|------------------------------|:-----:|:----:|:----:|:-----:|
+| DCMM 平均级                  | 1.8   | 2.2  | 3.0  | ↑     |
+| 关键表 DQ 通过率             | 78%   | 92%  | 95%  | ↑     |
+| 字段分类分级覆盖率           | 0%    | 45%  | 80%  | ↑     |
+| 数据血缘覆盖 job 数          | 0     | 12   | 30   | ↑     |
+| 口径冲突事件/月              | 6     | 3    | ≤1   | ↓     |
+
+## 2. 本季交付(10 min)
+- ✅ 章程 v1.0 签字
+- ✅ RACI 矩阵 v1.0
+- ✅ DataHub PoC 上线,3 源接入
+- ✅ GX 5 张关键表的 DQ 规则
+- ⚠ 分类分级推进 45%(卡点见下)
+
+## 3. 卡点与决策(25 min,主要时间)
+- [卡点 1:Steward 兼职无时间 → 决策:Sponsor 协调]
+- [卡点 2:某业务方抵触 → 决策:非侵入重新沟通]
+- [卡点 3:重要数据目录待行业发布 → 决策:暂按一般数据管]
+
+## 4. 下季度目标(10 min)
+- [目标 1:分类分级覆盖到 80%]
+- [目标 2:血缘 job 数到 30]
+- [目标 3:PIA 流程在研发 onboarding 落地]
+
+## Action Items(每条 owner + 截止)
+- ...</code></pre>
+
+<div class="callout">
+  <div class="label">复盘的关键</div>
+  <p style="margin:0;">
+  <strong>度量必须可观测、必须有基线</strong>。"提升数据质量"不算复盘,从 78% 到 92% 才算。L01 你写的章程度量在这里兑现 —— 如果当初写的不是数字,现在就复盘不出来。<strong>这是为什么 L01 反复强调"带数字"</strong>。
+  </p>
+</div>
+
+<div class="quiz" data-correct="b">
+  <div class="q">Q1 · 季度复盘最关键的元素是?</div>
+  <ul>
+    <li data-k="a">尽可能长的 PPT</li>
+    <li data-k="b">可观测度量 + 基线对比</li>
+    <li data-k="c">所有人发言机会</li>
+    <li data-k="d">每个细节都复盘</li>
+  </ul>
+  <div class="reveal">
+  <strong>答案:B</strong>。复盘的核心价值是<strong>"从 X 到 Y"</strong>的可观测对比,证明治理在产生效果。没有数字 = 复盘退化成工作汇报。<strong>这就倒逼 L01 章程的度量必须可观测、必须有基线</strong>。A 是反模式(PPT 越长越没人读);C 是流程表象不是本质;D 不可能(时间有限,聚焦卡点与决策)。
+  </div>
+</div>
+
+<!-- ====================================================== -->
+<h2 id="capability-check">4. 能力自检(回到 Mission)(15 分钟)</h2>
+
+<p>
+回到 <code>MISSION.md</code>,看 Mission 里写的<strong>六条成功标准</strong>。逐条自检你做到了没:
+</p>
+
+<table>
+  <thead><tr><th>Mission 成功标准</th><th>来自哪课</th><th>你做到了?</th></tr></thead>
+  <tbody>
+    <tr>
+      <td>1. 用 DMBOK 11 知识区拆解真实场景,指出痛点与抓手</td>
+      <td>L01</td>
+      <td>☐</td>
+    </tr>
+    <tr>
+      <td>2. 独立起草章程 + 运营模型(含 Sponsor/Steward/Council/度量)</td>
+      <td>L01 + L02</td>
+      <td>☐</td>
+    </tr>
+    <tr>
+      <td>3. 用 DataHub + GE + OpenLineage 搭出最小可用 PoC</td>
+      <td>L04 + L05 + L06</td>
+      <td>☐</td>
+    </tr>
+    <tr>
+      <td>4. 用 DCMM(GB/T 36073-2025)做成熟度自评,给 6–12 月路线</td>
+      <td>L03</td>
+      <td>☐</td>
+    </tr>
+    <tr>
+      <td>5. 讲清 PIPL + DSL + 分类分级对项目的硬约束,翻译成工程动作</td>
+      <td>L07</td>
+      <td>☐</td>
+    </tr>
+    <tr>
+      <td>6. 写出给领导/平级都能看懂的立项 + 季度复盘文档</td>
+      <td>L08(本课)</td>
+      <td>☐</td>
+    </tr>
+  </tbody>
+</table>
+
+<div class="exercise">
+  <h3>练习 8.2 · 写下能力自评 <span class="badge">10 min</span></h3>
+  <p>新建 <code>learning-records/0008-capability-self-check.md</code>。对每一条:</p>
+  <ol>
+    <li><strong>打勾或不打勾</strong>(诚实,不打勾就承认)</li>
+    <li>不打勾的写一句<strong>"卡在哪"</strong></li>
+    <li>列一个<strong>"下一步补"</strong>的具体动作</li>
+  </ol>
+  <p>这份记录会指导你<strong>下一阶段</strong>该学什么 —— 这就是 teach skill 里说的"zone of proximal development"的下一步。</p>
+</div>
+
+<!-- ====================================================== -->
+<h2 id="what-next">5. 学完之后(10 分钟)</h2>
+
+<p>
+这门课是<strong>入门到能负责一个项目</strong>。真正的精通需要实战。下面是几个方向:
+</p>
+
+<h3>短期(0–3 月):把 PoC 跑成生产</h3>
+<ul>
+  <li>把 L04–L06 的 PoC 在公司真实环境跑起来</li>
+  <li>让 1–2 个 Steward 真正用起来,收反馈</li>
+  <li>第一个 Council 召开,章程 v1.0 签字</li>
+</ul>
+
+<h3>中期(3–12 月):补深度</h3>
+<ul>
+  <li><strong>MDM(主数据管理)</strong>:如果业务痛点涉及跨系统一致性,这是下一个深度方向(Loshin 的书)</li>
+  <li><strong>数据契约(Data Contract)</strong>:dbt/Soda 圈的新范式,把"上下游数据约定"代码化</li>
+  <li><strong>DCMM 正式评估</strong>:如果你想给组织拿证,联系 dcmm-cfeii.com</li>
+</ul>
+
+<h3>长期(12+ 月):向 Data Leader 演进</h3>
+<ul>
+  <li>Locally Optimistic Slack 社区(RESOURCES 里有):数据/分析领导者视角</li>
+  <li>从"做治理"到"治理数据团队 + 数据文化"</li>
+  <li>读 Ladley 第 2 版后半段(从项目到持续运营)</li>
+</ul>
+
+<div class="callout produce">
+  <div class="label">🎓 Mission 完成</div>
+  <p style="margin:0;">
+  你从"做过零散治理"走到了<strong>"能独立负责一个端到端数据治理项目"</strong>。这不是终点,是新的起点 —— 你现在有了体系,接下来靠实战让它变深。<strong>用起来,别只读</strong>。
+  </p>
+</div>
+
+<!-- ====================================================== -->
+<hr class="sep">
+
+<h2 id="recap">本课要点回顾</h2>
+
+<ol>
+  <li><strong>项目交付包结构</strong>:按 DCMM 域分组,90 留给 stakeholder,可移交是关键。</li>
+  <li><strong>立项文档 5 页</strong>:现状/目标/资源/路线/风险,Sponsor 不会读 50 页。</li>
+  <li><strong>季度复盘</strong>:可观测度量 + 基线对比,倒逼章程度量数字化。</li>
+  <li><strong>能力自检</strong>:对 Mission 六条标准逐条勾,不勾就写下一步。</li>
+  <li><strong>下一步靠实战</strong>:PoC → 生产 → 深度 → Leader。</li>
+</ol>
+
+<h2 id="primary-source">推荐一手阅读</h2>
+
+<p>
+<strong>本课主源</strong>:<a href="https://shop.elsevier.com/books/data-governance/ladley/978-0-12-815831-9" target="_blank" rel="noopener">John Ladley《Data Governance》2nd ed. 后半段(从项目到持续运营)</a>。本课是项目收尾,Ladley 后半段讲"如何让治理活下来",正是你的下一阶段读物。
+</p>
+
+<p>
+<strong>持续学习社区</strong>:<a href="https://locallyoptimistic.com/community/" target="_blank" rel="noopener">Locally Optimistic Slack</a>(数据/分析领导者社区)。当你从"做治理"走到"治理数据团队",这里是同温层。
+</p>
+
+<h2 id="end">课程结束</h2>
+
+<p>
+<strong>8 课结束</strong>。如果你完成了所有练习,你手里有一个完整的项目交付包、一份立项文档、一份复盘模板,以及把数据治理<strong>从概念变成自己能力</strong>的体系化认知。
+</p>
+
+<p>
+回到 <a href="../../index.html">课程总览</a>,回顾每一课。任何一课的疑问,都可以回来问老师。
+</p>
+
+<div class="ask-teacher">
+<strong>结业不是结束</strong>。把你这个项目的<strong>实际进展</strong>贴出来 —— 跑通没跑通、Sponsor 怎么回应、Steward 配合度、哪里卡住。我会基于你的实战情况给具体建议。这是从"学了"到"会了"的最后一步。
+</div>
+
+</main>
+
+<footer class="lesson">
+  <div>
+    <a href="../../index.html">总览</a> ·
+    <a href="0007-classification-compliance.html">← L07</a> ·
+    <span style="color:#888;">终课 ✦</span>
+  </div>
+  <div>Lesson 08 · Project Wrap-up (Final)</div>
+</footer>
+
+</body>
+</html>
