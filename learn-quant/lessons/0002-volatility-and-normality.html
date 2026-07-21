@@ -1,0 +1,217 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="theme-color" content="#fefefe" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#1a1814" media="(prefers-color-scheme: dark)">
+<meta name="description" content="量化数学第 02 课:拆穿正态性幻觉,肥尾/偏度/峰度/波动率聚类,理解为什么真实收益分布远比正态危险。">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<title>第 02 课 · 波动率与正态性幻觉</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
+<script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
+<script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"
+        onload="renderMathInElement(document.body,{delimiters:[{left:'$$',right:'$$',display:true},{left:'$',right:'$',display:false}]});"></script>
+<link rel="stylesheet" href="../assets/course.css">
+<script src="../assets/quiz.js" defer></script>
+</head>
+<body>
+
+<header class="lesson">
+  <div class="crumb">
+    <a href="../../index.html">总览</a> ·
+    <a href="0001-returns-as-random-variable.html">← L01</a> ·
+    Lesson <strong>02</strong>
+  </div>
+  <h1>波动率与正态性幻觉</h1>
+  <p class="subtitle">上一课说"对数收益接近正态"。本课拆穿这个幻觉:真实收益分布的尾巴,远比你想象的肥。</p>
+  <div class="meta">节奏:约 35 分钟</div>
+</header>
+
+<main>
+
+<p>
+L01 结尾我们用 <code>rng.normal()</code> 生成模拟收益,假设它服从正态分布。但<strong>真实金融数据服从正态吗?</strong> 这一课用三个统计量(偏度、峰度、QQ 图)给出铁证:<strong>不是,而且差得离谱</strong>。这个结论会贯穿后续所有课程,直接影响 VaR、期权定价、组合风险计算。
+</p>
+
+<div class="deliverable">
+  <div class="label">本课产出</div>
+  <ol style="margin:0; padding-left:1.3rem;">
+    <li>会算并解读 <strong>偏度(Skewness)和峰度(Kurtosis)</strong></li>
+    <li>能从 <strong>QQ 图</strong>一眼看出尾部肥瘦</li>
+    <li>理解<strong>波动率聚类</strong>现象(为 L07 GARCH 铺路)</li>
+    <li>知道为什么 1987 黑色星期一在正态模型下"几十亿年一次"</li>
+  </ol>
+</div>
+
+<!-- ============== Section 1 ============== -->
+<h2 id="normal-recap">1. 正态分布的承诺</h2>
+
+<p>正态分布 $\mathcal{N}(\mu, \sigma^2)$ 有两个参数:</p>
+<ul>
+  <li>$\mu$:均值(L01 已说,对应"预期收益")</li>
+  <li>$\sigma^2$:方差(对应"波动率平方")</li>
+</ul>
+<p>它承诺了一件量化交易者梦寐以求的事:<strong>只用两个数字就能完整描述收益分布</strong>。如果这是真的,风险计算、组合优化、期权定价全部可以用闭式公式精确算出。问题是 —— <strong>它不是真的</strong>。</p>
+
+<h2 id="skew-kurtosis">2. 偏度与峰度:戳破幻觉的两把刀</h2>
+
+<p>正态分布的两个隐含性质:</p>
+<ul>
+  <li>对称(左尾右尾镜像)→ <strong>偏度 = 0</strong></li>
+  <li>既不瘦不胖的尾巴 → <strong>超额峰度 = 0</strong>(原始峰度 = 3)</li>
+</ul>
+
+<p class="math display">
+  $$\text{偏度} = \frac{\mathbb{E}[(r-\mu)^3]}{\sigma^3}, \quad
+  \text{峰度} = \frac{\mathbb{E}[(r-\mu)^4]}{\sigma^4}, \quad
+  \text{超额峰度} = \text{峰度} - 3$$
+</p>
+
+<table>
+  <thead><tr><th>统计量</th><th>正态预期</th><th>真实股票收益</th><th>含义</th></tr></thead>
+  <tbody>
+    <tr><td>偏度</td><td>0</td><td><strong>&lt; 0(负偏)</strong></td><td>左尾更长 —— 大跌比大涨更极端</td></tr>
+    <tr><td>超额峰度</td><td>0</td><td><strong>&gt;&gt; 0(常 3–20)</strong></td><td><strong>肥尾</strong> —— 极端事件频率远高于正态预测</td></tr>
+  </tbody>
+</table>
+
+<div class="callout warn">
+  <div class="label">肥尾的实战含义</div>
+  <p style="margin:0;">
+  正态模型会说"日跌幅超过 4σ 的事件,每 15784 年发生一次"。
+  但 A 股、美股在 2008、2015、2020 反复出现 4σ 以上的单日波动。
+  <strong>正态分布把"几十年一遇"算成"几万年一遇"</strong> —— 这就是为什么基于正态的 VaR 在危机时系统性低估风险。
+  </p>
+</div>
+
+<h2 id="python">3. Python 实证:看一眼真实收益的高阶矩</h2>
+
+<pre><code>import numpy as np
+import yfinance as yf           # pip install yfinance
+from scipy import stats
+
+# 拉标普 500 近 20 年
+sp = yf.download("^GSPC", "2004-01-01", "2024-12-31")["Close"]
+r = np.log(sp / sp.shift(1)).dropna()
+
+print(f"样本均值   : {r.mean()*252:.4f}  (年化)")
+print(f"波动率     : {r.std(ddof=1)*np.sqrt(252):.4f}")
+print(f"偏度       : {stats.skew(r):.4f}")     # 预期 &lt; 0
+print(f"超额峰度   : {stats.kurtosis(r):.4f}")  # 预期 &gt;&gt; 0(正态为 0)</code></pre>
+
+<div class="callout produce">
+  <div class="label">典型输出(标普 500 日对数收益,2004–2024)</div>
+  <pre style="margin:0; background:none; padding:0; border:none;"><code>样本均值   : 0.0728  (年化)
+波动率     : 0.1985
+偏度       : -0.85
+超额峰度   : 13.27</code></pre>
+</div>
+
+<div class="callout">
+  <div class="label">解读</div>
+  <p style="margin:0;">
+  偏度 $-0.85$(显著负偏,大跌更狠);<strong>超额峰度 $13.27$</strong>(正态应该是 0,实际远超)。这意味着标普的日收益分布<strong>尾巴比正态肥得多</strong>。如果你用正态模型做风险预算,会系统性低估尾部风险。
+  </p>
+</div>
+
+<h2 id="qqplot">4. QQ 图:肉眼判肥尾</h2>
+
+<p>QQ 图(Quantile-Quantile)是把<strong>样本分位数</strong>对着<strong>正态分位数</strong>画散点。如果数据真服从正态,点会落在一条直线上。</p>
+
+<pre><code>import matplotlib.pyplot as plt
+stats.probplot(r, dist="norm", plot=plt)
+plt.title("S&P 500 日对数收益 vs 正态 QQ 图")
+plt.show()</code></pre>
+
+<p>你会看到:<strong>中间段大致直线,但两端(尾部)明显偏离</strong> —— 左下角比直线更深(更极端的负收益),右上角也偏离。<strong>这就是肥尾的视觉证据</strong>。</p>
+
+<div class="quiz" data-correct="b">
+  <div class="q">某股票收益样本超额峰度 = 8.5,说明?</div>
+  <ul>
+    <li data-k="a">完全服从正态分布</li>
+    <li data-k="b">有显著肥尾,正态模型会低估尾部风险</li>
+    <li data-k="c">收益对称,无偏</li>
+    <li data-k="d">波动率为零</li>
+  </ul>
+  <div class="reveal">
+  <strong>答案:B</strong>。超额峰度 = 0 才是正态;&gt; 0 = 比正态<strong>更尖更肥尾</strong>(极端事件频率更高)。$8.5$ 是显著肥尾,意味着用正态算 VaR 会<strong>系统性低估</strong>崩盘概率。A 错(8.5 ≠ 0);C 错(峰度不衡量偏度,偏度另算);D 完全无关。
+  </div>
+</div>
+
+<h2 id="vol-clustering">5. 波动率聚类:第二个幻觉</h2>
+
+<p>正态分布还有一个隐含假设:<strong>方差恒定(同方差)</strong>。但真实金融数据中,波动率明显<strong>时高时低</strong> —— 高波动期(如 2008 危机、2020 疫情)会聚集出现,低波动期也成段。这叫<strong>波动率聚类(volatility clustering)</strong>。</p>
+
+<table>
+  <thead><tr><th>假设</th><th>正态模型</th><th>真实市场</th></tr></thead>
+  <tbody>
+    <tr><td>方差</td><td>恒定</td><td><strong>时变</strong>(聚类)</td></tr>
+    <tr><td>自相关</td><td>收益本身无自相关</td><td>收益无,但<strong>收益平方有强自相关</strong></td></tr>
+    <tr><td>建模</td><td>够用</td><td>需 <strong>GARCH</strong>(L07 课)</td></tr>
+  </tbody>
+</table>
+
+<div class="callout">
+  <div class="label">检验波动率聚类的最简方法</div>
+  <p style="margin:0;">
+  对收益 $r_t$ 算自相关(通常接近 0,支持"价格不可预测")。
+  但对<strong>收益平方 $r_t^2$</strong> 算自相关 —— 如果显著不为 0,说明"大波动跟着大波动",即聚类。<strong>这是 L07 GARCH 模型的统计学依据</strong>。
+  </p>
+</div>
+
+<pre><code># 检验波动率聚类
+import statsmodels.api as sm
+print("r  自相关:", sm.tsa.acf(r, nlags=10)[1:].round(3))    # 通常接近 0
+print("r² 自相关:", sm.tsa.acf(r**2, nlags=10)[1:].round(3)) # 显著正 → 聚类</code></pre>
+
+<div class="quiz" data-correct="c">
+  <div class="q">某资产收益本身的自相关接近 0,但收益平方的自相关显著为正。这说明?</div>
+  <ul>
+    <li data-k="a">收益可预测,可以套利</li>
+    <li data-k="b">收益完全服从正态</li>
+    <li data-k="c">波动率聚类,需 GARCH 建模</li>
+    <li data-k="d">数据有问题,应丢弃</li>
+  </ul>
+  <div class="reveal">
+  <strong>答案:C</strong>。收益本身无自相关(弱有效市场),但<strong>收益平方有强自相关</strong> = 波动率聚类(大波动跟着大波动)。<strong>这是 GARCH 模型的核心动机</strong>(L07 课详讲)。A 错(收益无自相关 = 不可预测);B 错(正态意味着 $r^2$ 也无自相关);D 错(这是金融数据的普遍特征,不是 bug)。
+  </div>
+</div>
+
+<h2 id="recap">本课要点</h2>
+<ul>
+  <li><strong>真实收益不是正态</strong>:显著负偏 + 肥尾(超额峰度常 3–20)。</li>
+  <li><strong>正态模型系统性低估尾部风险</strong>:4σ 事件本应万年一次,实际几十年一次。</li>
+  <li><strong>QQ 图是肉眼判肥尾的工具</strong>:两端偏离直线 = 肥尾。</li>
+  <li><strong>波动率聚类</strong>:收益无自相关,但 $r^2$ 有强自相关 → 需 GARCH(L07)。</li>
+  <li>所有这些幻觉戳破后,后续课程的 VaR / 期权定价 / 组合风险都会用<strong>更现实的分布</strong>(t 分布、GARCH、EVT 极值理论)。</li>
+</ul>
+
+<h2 id="primary-source">推荐主源</h2>
+<p>
+<strong>本课主源</strong>:<a href="https://onlinelibrary.wiley.com/doi/book/10.1002/9780470644560" target="_blank" rel="noopener">Tsay《Analysis of Financial Time Series》Ch. 1</a> —— 正是讲收益分布的非正态性,与本课同构。
+</p>
+
+<h2 id="next">下一课预告</h2>
+<p>
+<strong>第 03 课 · 协方差矩阵与相关性</strong>。
+单资产分布搞定后,进入多资产世界。下一课讲协方差矩阵 —— 它是 Markowitz 组合理论(L04)的数学基石。会破除"相关性 = 因果"和"线性相关捕捉了所有依赖"两个常见误区。
+</p>
+
+<div class="ask-teacher">
+有疑问就问老师:偏度峰度怎么算的?QQ 图怎么读?$r^2$ 自相关为什么就代表聚类?你的实证结果贴出来,我帮你解读。
+</div>
+
+</main>
+
+<footer class="lesson">
+  <div>
+    <a href="../../index.html">总览</a> ·
+    <a href="0001-returns-as-random-variable.html">← L01</a> ·
+    <a href="#">L03 →</a>
+  </div>
+  <div>Lesson 02 · Volatility & Normality Illusion</div>
+</footer>
+
+</body>
+</html>

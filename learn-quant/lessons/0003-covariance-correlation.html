@@ -1,0 +1,203 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="theme-color" content="#fefefe" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#1a1814" media="(prefers-color-scheme: dark)">
+<meta name="description" content="量化数学第 03 课:协方差矩阵与相关性。理解它,才能进入 Markowitz 组合理论。">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<title>第 03 课 · 协方差矩阵与相关性</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
+<script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
+<script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"
+        onload="renderMathInElement(document.body,{delimiters:[{left:'$$',right:'$$',display:true},{left:'$',right:'$',display:false}]});"></script>
+<link rel="stylesheet" href="../assets/course.css">
+<script src="../assets/quiz.js" defer></script>
+</head>
+<body>
+
+<header class="lesson">
+  <div class="crumb">
+    <a href="../../index.html">总览</a> ·
+    <a href="0002-volatility-and-normality.html">← L02</a> ·
+    Lesson <strong>03</strong>
+  </div>
+  <h1>协方差矩阵与相关性</h1>
+  <p class="subtitle">从单资产到多资产世界。协方差矩阵是 Markowitz 组合理论的数学基石。</p>
+  <div class="meta">节奏:约 35 分钟</div>
+</header>
+
+<main>
+
+<p>
+L01、L02 把单只资产的收益分布讲透了。但量化组合管理的核心问题不是"这只资产好不好",是"<strong>这些资产凑在一起好不好</strong>"。回答这个问题需要协方差矩阵 —— 一个 $n$ 维资产世界的风险全貌。
+</p>
+
+<div class="deliverable">
+  <div class="label">本课产出</div>
+  <ol style="margin:0; padding-left:1.3rem;">
+    <li>会算 <strong>协方差矩阵 $\Sigma$</strong> 和<strong>相关系数矩阵 $C$</strong></li>
+    <li>推导并理解组合方差公式 $\sigma_p^2 = w^\top \Sigma w$</li>
+    <li>看清"相关性 = 0 不代表独立"的陷阱</li>
+    <li>Python 跑真实多资产协方差,理解为什么分散化能降风险</li>
+  </ol>
+</div>
+
+<h2 id="cov-def">1. 协方差的定义</h2>
+<p>两个随机变量 $X, Y$ 的协方差:</p>
+<p class="math display">
+$$\text{Cov}(X, Y) = \mathbb{E}[(X - \mathbb{E}[X])(Y - \mathbb{E}[Y])]$$
+</p>
+<p>直觉:它衡量 $X$ 和 $Y$ <strong>是否同向波动</strong>。</p>
+<ul>
+  <li>$\text{Cov} > 0$:同向(一个涨另一个也涨)</li>
+  <li>$\text{Cov} < 0$:反向(对冲价值)</li>
+  <li>$\text{Cov} = 0$:<strong>线性不相关,但不一定独立!</strong></li>
+</ul>
+
+<h2 id="correlation">2. 相关系数:无量纲化</h2>
+<p>协方差的缺点是<strong>带量纲</strong>(难以跨资产比较)。无量纲化得到相关系数:</p>
+<p class="math display">
+$$\rho_{X,Y} = \frac{\text{Cov}(X, Y)}{\sigma_X \sigma_Y} \in [-1, 1]$$
+</p>
+<p>$\rho = -1$ 完美对冲,$\rho = +1$ 完全同向,$\rho = 0$ <strong>仅指"无线性关系"</strong>。</p>
+
+<div class="callout warn">
+  <div class="label">⚠ 最危险的误区</div>
+  <p style="margin:0;">
+  <strong>$\rho = 0$ 不等于独立</strong>。相关系数只捕捉<strong>线性</strong>依赖。比如 $Y = X^2$(其中 $X$ 对称分布),则 $\rho_{X,Y} = 0$,但 $Y$ 完全由 $X$ 决定。这就是为什么<strong>危机时所有"低相关"资产一起崩</strong> —— 平时线性相关低,但尾部依赖极强。
+  </p>
+</div>
+
+<h2 id="matrix">3. 协方差矩阵 $\Sigma$:多资产风险全貌</h2>
+<p>对 $n$ 个资产,协方差矩阵是 $n \times n$ 对称半正定矩阵:</p>
+<p class="math display">
+$$\Sigma = \begin{pmatrix}
+\sigma_1^2 & \sigma_{12} & \cdots & \sigma_{1n} \\
+\sigma_{21} & \sigma_2^2 & \cdots & \sigma_{2n} \\
+\vdots & & \ddots & \vdots \\
+\sigma_{n1} & \sigma_{n2} & \cdots & \sigma_n^2
+\end{pmatrix}$$
+</p>
+<p>对角元是<strong>各资产方差</strong>(自身风险),非对角元是<strong>协方差</strong>(两两联动)。<strong>所有分散化的数学都从这个矩阵开始</strong>。</p>
+
+<h2 id="portfolio-var">4. 组合方差的推导(L04 Markowitz 的核心)</h2>
+<p>组合收益 $R_p = \sum_i w_i R_i$,其中 $w_i$ 是权重(权重向量 $w$)。组合方差:</p>
+<p class="math display">
+$$\sigma_p^2 = \text{Var}\!\left(\sum_i w_i R_i\right) = \sum_i \sum_j w_i w_j \sigma_{ij} = w^\top \Sigma w$$
+</p>
+<p>这个公式极其优雅 —— <strong>组合风险不是各资产风险的简单加总,而是协方差矩阵的二次型</strong>。正是这个二次型让"分散化"在数学上有效:</p>
+
+<div class="callout">
+  <div class="label">分散化的数学奇迹</div>
+  <p style="margin:0;">
+  假设 $n$ 个资产方差都是 $\sigma^2$、相关性都是 $\rho$、等权($w_i = 1/n$),则:
+  $$\sigma_p^2 = \sigma^2 \left[\frac{1}{n} + \left(1 - \frac{1}{n}\right)\rho\right]$$
+  当 $n \to \infty$,$\sigma_p^2 \to \sigma^2 \rho$。<strong>不可分散风险 = 系统风险 = 由平均相关 $\rho$ 决定的部分</strong>。这就是 CAPM(L05)"$\beta$ 衡量系统风险"的伏笔。
+  </p>
+</div>
+
+<h2 id="python">5. Python 实证:真实多资产协方差</h2>
+<pre><code>import yfinance as yf
+import numpy as np
+import pandas as pd
+
+# 5 个资产:美股、美债、黄金、新兴市场、REIT
+tickers = ["SPY", "TLT", "GLD", "EEM", "VNQ"]
+px = yf.download(tickers, "2015-01-01", "2024-12-31")["Close"]
+rets = np.log(px / px.shift(1)).dropna()
+
+# 年化协方差矩阵
+Sigma = rets.cov() * 252
+print("协方差矩阵 Σ(年化):")
+print(Sigma.round(4))
+
+# 相关系数矩阵
+C = rets.corr()
+print("\n相关系数矩阵 C:")
+print(C.round(3))
+
+# 等权组合的年化波动率
+w = np.array([0.2]*5)
+port_var = w @ Sigma.values @ w
+print(f"\n等权组合年化波动率: {np.sqrt(port_var):.4f}")
+print(f"平均单资产波动率  : {rets.std().mean()*np.sqrt(252):.4f}")</code></pre>
+
+<div class="callout produce">
+  <div class="label">典型输出</div>
+  <pre style="margin:0; background:none; padding:0; border:none;"><code>等权组合年化波动率: 0.1432
+平均单资产波动率  : 0.1856</code></pre>
+</div>
+
+<div class="callout">
+  <div class="label">解读</div>
+  <p style="margin:0;">
+  组合波动率 $14.3\%$ <strong>低于</strong>平均单资产波动率 $18.6\%$ —— 这就是分散化的实证证据。
+  非对角元(协方差)如果不是完全 1,分散化就有空间。<strong>这就是 Markowitz 找最优 $w$ 的舞台</strong>(L04 课)。
+  </p>
+</div>
+
+<div class="quiz" data-correct="b">
+  <div class="q">两资产相关性 $\rho = -1$,等权组合的方差是?</div>
+  <ul>
+    <li data-k="a">两方差之和(无对冲)</li>
+    <li data-k="b">(σ₁ - σ₂)² / 4(可完全对冲)</li>
+    <li data-k="c">两方差平均</li>
+    <li data-k="d">为零(必然)</li>
+  </ul>
+  <div class="reveal">
+  <strong>答案:B</strong>。$\rho = -1$ 时 $\sigma_p^2 = 0.25(\sigma_1 - \sigma_2)^2$。若 $\sigma_1 = \sigma_2$,则<strong>可完全消除风险</strong>(对冲基金常用)。D 错:只有 $\rho = -1$ <strong>且</strong> $\sigma_1 = \sigma_2$ 才方差为零。A/C 错(忽略协方差项)。这就是为什么找负相关资产是量化的圣杯。
+  </div>
+</div>
+
+<div class="quiz" data-correct="c">
+  <div class="q">"相关系数 $\rho = 0$ 所以两资产独立,可独立建模" —— 这话对吗?</div>
+  <ul>
+    <li data-k="a">对,$\rho=0$ 就是独立</li>
+    <li data-k="b">对,可独立建模</li>
+    <li data-k="c">错,$\rho=0$ 只代表无线性依赖</li>
+    <li data-k="d">要看方差大小</li>
+  </ul>
+  <div class="reveal">
+  <strong>答案:C</strong>。$\rho = 0$ 只说明<strong>无<strong>线性</strong>关系</strong>,不代表独立。可能存在非线性依赖(如 $Y = X^2$),更危险的是<strong>尾部依赖</strong> —— 平时低相关,危机时同步崩。这正是 2008 很多"分散化"组合失效的根因。后续可学 copula / 尾部相关,但入门阶段先记住这条警告。
+  </div>
+</div>
+
+<h2 id="recap">本课要点</h2>
+<ul>
+  <li><strong>协方差 $\text{Cov}(X,Y)$</strong>:衡量同向/反向波动;正/负/零。</li>
+  <li><strong>相关系数 $\rho \in [-1,1]$</strong>:无量纲化的协方差。<strong>只捕捉线性依赖</strong>。</li>
+  <li><strong>协方差矩阵 $\Sigma$</strong>:$n$ 资产风险全貌,对称半正定。</li>
+  <li><strong>组合方差 $\sigma_p^2 = w^\top \Sigma w$</strong>:Markowitz 的数学基石。</li>
+  <li><strong>分散化降风险</strong>:只要不是完全正相关,组合风险低于平均单资产风险。</li>
+</ul>
+
+<h2 id="primary-source">推荐主源</h2>
+<p>
+<strong>本课主源</strong>:<a href="https://www.jstor.org/stable/2975974" target="_blank" rel="noopener">Markowitz 1952 原始论文 "Portfolio Selection"</a> —— 协方差矩阵的金融应用起点。
+</p>
+
+<h2 id="next">下一课预告</h2>
+<p>
+<strong>第 04 课 · Markowitz 均值-方差与有效前沿</strong>。
+有了 $\Sigma$ 和 $w^\top \Sigma w$,我们终于可以回答"最优组合权重是多少"。下一课推导有效前沿、最小方差组合、切点组合(tangency),并用 Python 画出完整前沿。
+</p>
+
+<div class="ask-teacher">
+有疑问就问:协方差怎么算?$w^\top \Sigma w$ 怎么理解?为什么对角线是方差?$\rho=0$ 和独立为什么不同?贴你的实证结果,我帮你看。
+</div>
+
+</main>
+
+<footer class="lesson">
+  <div>
+    <a href="../../index.html">总览</a> ·
+    <a href="0002-volatility-and-normality.html">← L02</a> ·
+    <a href="#">L04 →</a>
+  </div>
+  <div>Lesson 03 · Covariance Matrix & Correlation</div>
+</footer>
+
+</body>
+</html>
