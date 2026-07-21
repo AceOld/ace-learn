@@ -1,0 +1,365 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="theme-color" content="#fefefe" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#1a1814" media="(prefers-color-scheme: dark)">
+<meta name="description" content="数据治理第 05 课:Great Expectations (GX Core 1.x) 数据质量 PoC,6 类核心 expectation,可运行 Python 代码。">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<title>第 05 课 · 数据质量:Great Expectations PoC</title>
+<link rel="stylesheet" href="../assets/course.css">
+<script src="../assets/quiz.js" defer></script>
+</head>
+<body>
+
+<header class="lesson">
+  <div class="crumb">
+    <a href="../../index.html">总览</a> ·
+    <a href="0004-metadata-catalog-datahub.html">← L04</a> ·
+    Lesson <strong>05</strong>(技术三连 · 2/3)
+  </div>
+  <h1>数据质量 —— Great Expectations PoC</h1>
+  <p class="subtitle">L04 让你知道"数据长什么样"。本课回答"数据好不好" —— 用 GX 把"质量"从形容词变成可执行的断言。</p>
+  <div class="meta">
+    节奏:约 75 分钟 · 产出物:可运行的 GX 期望套件 + DQ 报告
+  </div>
+</header>
+
+<main>
+
+<div class="callout warn">
+  <div class="label">⚠ API 时效(2026-07)</div>
+  <p style="margin:0;">
+  本课基于 <strong>GX Core 1.x</strong>(2024 起 GA,2026-07 当前版本 <strong>1.19.0</strong>)。如果你看到的教程用 <code>validator.expect_column_*</code> 流式 API,那是 <strong>0.18 旧 API,已在 1.0 移除</strong>,会直接报错。本课全程用新的 class-based API:<code>gx.expectations.ExpectColumnValuesToNotBeNull(...)</code>。
+  </p>
+</div>
+
+<div class="deliverable">
+  <div class="label">本课产出物</div>
+  <ol style="margin:0; padding-left:1.3rem;">
+    <li><strong>可运行的 GX 脚本</strong> —— <code>gx_demo.py</code>,含 6 类核心 expectation</li>
+    <li><strong>HTML DQ 报告(Data Docs)</strong> —— 自动生成的可分享报告</li>
+    <li><strong>自己场景的 10 条 expectation 清单</strong> —— 落到具体字段</li>
+  </ol>
+</div>
+
+<!-- ====================================================== -->
+<h2 id="quality-dimensions">1. 数据质量的六个维度(10 分钟)</h2>
+
+<p>
+"数据质量好不好"是空话。DMBOK 和 ISO/IEC 25012 把它拆成<strong>可度量的维度</strong>。下面是 6 个最常用的:
+</p>
+
+<table>
+  <thead><tr><th>维度</th><th>含义</th><th>典型规则</th></tr></thead>
+  <tbody>
+    <tr><td><strong>完整性 Completeness</strong></td><td>该有的不能空</td><td><code>user_id IS NOT NULL</code></td></tr>
+    <tr><td><strong>唯一性 Uniqueness</strong></td><td>不该重复的不重复</td><td><code>user_id</code> 唯一</td></tr>
+    <tr><td><strong>有效性 Validity</strong></td><td>符合格式/范围</td><td><code>age BETWEEN 18 AND 120</code></td></tr>
+    <tr><td><strong>一致性 Consistency</strong></td><td>跨表/跨系统对得上</td><td>订单总额 = 子项求和</td></tr>
+    <tr><td><strong>时效性 Timeliness</strong></td><td>数据新鲜</td><td><code>updated_at > now() - INTERVAL '1 day'</code></td></tr>
+    <tr><td><strong>准确性 Accuracy</strong></td><td>与现实世界相符</td><td>电话号码能拨通(最难,通常需外部验证)</td></tr>
+  </tbody>
+</table>
+
+<div class="callout">
+  <div class="label">关键认知</div>
+  <p style="margin:0;">
+  这六个维度里,<strong>前四个可以机器化检测</strong>(完整性/唯一性/有效性/一致性);<strong>时效性靠 SLA 监控</strong>;<strong>准确性最难,通常需要人工或外部源校验</strong>。工具能解决的是前五个 —— 准确性必须靠业务流程。不要指望 GX 解决"数据准不准"问题。
+  </p>
+</div>
+
+<div class="quiz" data-correct="b">
+  <div class="q">Q1 · 下面哪个数据质量维度最难用工具自动检测?</div>
+  <ul>
+    <li data-k="a">完整性(非空)</li>
+    <li data-k="b">准确性(与现实相符)</li>
+    <li data-k="c">唯一性(不重复)</li>
+    <li data-k="d">有效性(格式/范围)</li>
+  </ul>
+  <div class="reveal">
+  <strong>答案:B</strong>。完整性(A)、唯一性(C)、有效性(D)都是<strong>结构性检查</strong>,工具直接能跑。准确性(B)需要与现实世界对照(电话能拨通吗、地址真实吗、收入对吗),<strong>必须人工抽样或对接外部权威源</strong>。这是为什么数据治理项目通常先解决前 4 维,准确性留给业务流程。这也是为什么"数据准不准"不能只靠 DQ 工具回答。
+  </div>
+</div>
+
+<!-- ====================================================== -->
+<h2 id="install">2. 安装 GX Core(5 分钟)</h2>
+
+<pre><code># 强烈建议 venv(和 L04 DataHub 的 venv 分开,避免 pydantic 冲突)
+python3 -m venv ~/gx-venv
+source ~/gx-venv/bin/activate
+
+# 包名仍是 great_expectations(PyPI 分布名未变,只是品牌从 GE 改 GX)
+pip install "great_expectations>=1.19,<2" pandas
+
+# 验证
+python -c "import great_expectations as gx; print(gx.__version__)"</code></pre>
+
+<p class="sidenote">
+<strong>坑</strong>:PyPI 包名是 <code>great_expectations</code>(下划线),不是 <code>gx</code>。但 import 时用 <code>import great_expectations as gx</code>(官方推荐的 2026 别名)。Python 3.10 是最低线,3.13 完全支持。
+</p>
+
+<!-- ====================================================== -->
+<h2 id="workflow">3. GX Core 1.x 的对象图(10 分钟)</h2>
+
+<p>理解 GX 1.x 的对象关系,后面写代码才不会迷路。一张图:</p>
+
+<pre><code>DataContext                        # 入口,mode="file" 才能生成 Data Docs
+ └─ data_sources.add_pandas(...)   # 数据源(Pandas/SQL/Spark)
+     └─ add_dataframe_asset(...)   # 数据资产
+         └─ add_batch_definition_whole_dataframe(...)  # 批定义
+                ↕ (ValidationDefinition 关联)
+context.suites.add(ExpectationSuite)   # 期望套件
+     └─ add_expectation(gx.expectations.ExpectColumnToExist(...))
+                ↕
+context.checkpoints.add(Checkpoint(validation_definitions=[...]))
+                ↓ checkpoint.run(batch_parameters={"dataframe": df})
+        Validation Results → Data Docs(HTML 报告)</code></pre>
+
+<div class="callout">
+  <div class="label">3 个核心概念</div>
+  <ol style="margin:0; padding-left:1.3rem;">
+    <li><strong>Expectation(期望)</strong>:一条可执行的断言,如"age 列值在 18-120 之间"。这是<strong>数据契约的最小单位</strong>。</li>
+    <li><strong>ExpectationSuite(期望套件)</strong>:一组 expectation,描述"一张表应该长什么样"。是<strong>数据契约的载体</strong>。</li>
+    <li><strong>Checkpoint</strong>:把套件 + 数据 + 触发动作绑一起,执行后产出 Validation Results。是<strong>DQ 任务的可执行单元</strong>。</li>
+  </ol>
+</div>
+
+<!-- ====================================================== -->
+<h2 id="hands-on">4. 完整可运行示例(30 分钟)</h2>
+
+<p>下面这个脚本<strong>复制粘贴就能跑</strong>。它创建一份"好数据",定 6 条 expectation,然后用"坏数据"跑校验,最后生成 HTML 报告。</p>
+
+<pre><code>"""gx_demo.py — GX Core 1.x 完整 PoC(2026-07 验证可跑)"""
+import great_expectations as gx
+import pandas as pd
+
+# --- 1. 创建 FileDataContext(必须 file 模式才能生成 Data Docs)---------
+context = gx.get_context(mode="file", project_root_dir=".")
+
+# --- 2. 构造"已知良好"参考数据 -----------------------------------------
+good_df = pd.DataFrame({
+    "user_id":   [1, 2, 3, 4, 5],
+    "email":     ["a@x.com","b@x.com","c@x.com","d@x.com","e@x.com"],
+    "age":       [25, 30, 35, 40, 22],
+    "country":   ["US", "CA", "US", "GB", "US"],
+})
+
+# --- 3. 连接数据(Data Source → Asset → Batch Definition)-------------
+data_source = context.data_sources.add_pandas("pandas_src")
+data_asset  = data_source.add_dataframe_asset(name="users_asset")
+batch_def   = data_asset.add_batch_definition_whole_dataframe("users_batch_def")
+
+# --- 4. 创建期望套件 + 6 条 expectation -------------------------------
+suite = context.suites.add(gx.ExpectationSuite(name="user_suite"))
+
+# 完整性:user_id 不能空
+suite.add_expectation(gx.expectations.ExpectColumnValuesToNotBeNull(column="user_id"))
+# 存在性:列必须存在
+suite.add_expectation(gx.expectations.ExpectColumnToExist(column="email"))
+# 唯一性:user_id 不重复
+suite.add_expectation(gx.expectations.ExpectColumnValuesToBeUnique(column="user_id"))
+# 有效性:年龄范围
+suite.add_expectation(gx.expectations.ExpectColumnValuesToBeBetween(
+    column="age", min_value=18, max_value=120))
+# 有效性:国家枚举
+suite.add_expectation(gx.expectations.ExpectColumnValuesToBeInSet(
+    column="country", value_set=["US", "CA", "GB"]))
+# 有效性:邮箱格式
+suite.add_expectation(gx.expectations.ExpectColumnValuesToMatchRegex(
+    column="email", regex=r"^[^@]+@[^@]+\.[^@]+$"))
+
+# --- 5. ValidationDefinition 把"数据"和"期望"绑起来 ------------------
+validation_def = context.validation_definitions.add(
+    gx.core.validation_definition.ValidationDefinition(
+        name="users_validation",
+        data=batch_def,
+        suite=suite,
+    )
+)
+
+# --- 6. Checkpoint 绑定执行单元 ---------------------------------------
+checkpoint = context.checkpoints.add(
+    gx.checkpoint.checkpoint.Checkpoint(
+        name="users_checkpoint",
+        validation_definitions=[validation_def],
+    )
+)
+
+# --- 7. 跑"坏数据",看哪些 expectation 失败 ---------------------------
+bad_df = good_df.copy()
+bad_df.loc[1, "user_id"] = 1          # 重复 → 唯一性失败
+bad_df.loc[2, "age"]     = 150        # 越界 → between 失败
+bad_df.loc[3, "country"] = "XX"       # 不在枚举 → in_set 失败
+bad_df.loc[4, "email"]   = "not-an-email"  # 格式错 → regex 失败
+
+result = checkpoint.run(batch_parameters={"dataframe": bad_df})
+print(result.describe())
+
+# --- 8. 生成 HTML 报告 -------------------------------------------------
+context.build_data_docs()
+print(context.open_data_docs())  # 打开浏览器或打印 file:// URL
+# 默认输出位置:./gx/uncommitted/data_docs/local_site/index.html</code></pre>
+
+<h3>预期结果</h3>
+
+<p>脚本跑完后,终端输出会显示 4 条失败(唯一性/between/in_set/regex 各一条)。浏览器自动打开 Data Docs,你能看到每个 expectation 的<strong>通过/失败率 + 失败样本</strong>。</p>
+
+<table>
+  <thead><tr><th>expectation</th><th>good_df 结果</th><th>bad_df 结果</th></tr></thead>
+  <tbody>
+    <tr><td>ExpectColumnToExist (email)</td><td>✅</td><td>✅</td></tr>
+    <tr><td>ExpectColumnValuesToNotBeNull (user_id)</td><td>✅</td><td>✅</td></tr>
+    <tr><td>ExpectColumnValuesToBeUnique (user_id)</td><td>✅</td><td>❌(1 个重复)</td></tr>
+    <tr><td>ExpectColumnValuesToBeBetween (age)</td><td>✅</td><td>❌(150 越界)</td></tr>
+    <tr><td>ExpectColumnValuesToBeInSet (country)</td><td>✅</td><td>❌(XX 非法)</td></tr>
+    <tr><td>ExpectColumnValuesToMatchRegex (email)</td><td>✅</td><td>❌("not-an-email")</td></tr>
+  </tbody>
+</table>
+
+<div class="quiz" data-correct="c">
+  <div class="q">Q2 · GX Core 1.x 中,一组 expectation 放在哪个对象里?</div>
+  <ul>
+    <li data-k="a">Checkpoint</li>
+    <li data-k="b">Validator</li>
+    <li data-k="c">ExpectationSuite</li>
+    <li data-k="d">DataContext</li>
+  </ul>
+  <div class="reveal">
+  <strong>答案:C</strong>。<strong>ExpectationSuite</strong> 是一组 expectation 的容器,描述"一张表应该长什么样" —— 即<strong>数据契约的载体</strong>。A(Checkpoint)是把 suite+数据+动作绑起来执行的单元;B(Validator)是 <strong>0.18 旧 API,1.x 已删除</strong>;D(DataContext)是入口,管理 suites/checkpoints/data_sources 全局。
+  </div>
+</div>
+
+<!-- ====================================================== -->
+<h2 id="vs-alternatives">5. GX vs Soda vs dbt tests(5 分钟)</h2>
+
+<p>三个工具解决同类问题,选型看场景:</p>
+
+<table>
+  <thead><tr><th>维度</th><th>GX</th><th>Soda Core</th><th>dbt tests</th></tr></thead>
+  <tbody>
+    <tr><td>风格</td><td>Python,类 API</td><td>声明式 YAML</td><td>SQL + YAML</td></tr>
+    <tr><td>报告</td><td>Data Docs HTML(最强)</td><td>Soda Cloud</td><td>dbt docs</td></tr>
+    <tr><td>适合</td><td>复杂校验、多源、需 Python</td><td>声明式、非工程师友好</td><td>已在 dbt 上的项目</td></tr>
+    <tr><td>学习曲线</td><td>陡(API 多)</td><td>平(YAML 简单)</td><td>低(顺道)</td></tr>
+    <tr><td>本课选它原因</td><td>最完整,适合教学</td><td>—</td><td>—</td></tr>
+  </tbody>
+</table>
+
+<div class="callout">
+  <div class="label">实战建议</div>
+  <p style="margin:0;">
+  <strong>已在 dbt → 用 dbt tests</strong>(零成本,顺道覆盖);<strong>多源/复杂校验/需 HTML 报告 → GX</strong>;<strong>团队非工程师多 → Soda</strong>。三者可并存:dbt tests 守 SQL 模型,GX 守跨源契约,Soda 做轻量监控。<strong>不要为了用工具而用工具</strong> —— L03 自评里 DQ 是短板,但 DQ 工具本身不解决问题,<strong>规则的设计和 Owner 的归属</strong>才解决。
+  </p>
+</div>
+
+<!-- ====================================================== -->
+<h2 id="datahub-integration">6. 把 DQ 结果送进 DataHub(可选,带重要 caveat)</h2>
+
+<div class="callout warn">
+  <div class="label">⚠ 时效风险(2026-07)</div>
+  <p style="margin:0;">
+  DataHub 的 <code>DataHubValidationAction</code> 官方测试范围是 <strong>GX 0.18.x,不确认支持 GX Core 1.x</strong>(详见 <a href="https://docs.datahub.com/docs/metadata-ingestion/integration_docs/great-expectations" target="_blank" rel="noopener">DataHub 集成文档</a>)。本节作为概念介绍,实际落地前<strong>务必先验证你的 GX 版本与 plugin 兼容</strong>。如不兼容,改用 GX 自带 Data Docs + Slack/邮件告警也是合理路径。
+  </p>
+</div>
+
+<p>
+理想流程:DQ 失败 → DataHub 显示该表"DQ 状态:failed"→ Steward 收到通知。这是 DMBOK "Metadata" 和 "Data Quality" 两个知识区<strong>在工程上的交汇</strong>。配置思路:
+</p>
+
+<pre><code># 安装 plugin(注意:可能仅兼容 GX 0.18)
+pip install acryl-datahub-gx-plugin
+
+# Checkpoint 配置里加 action(0.18 风格 YAML)
+action_list:
+  - name: datahub_action
+    action:
+      module_name: datahub_gx_plugin.action
+      class_name: DataHubValidationAction
+      server_url: http://localhost:8080  # L04 起的 DataHub</code></pre>
+
+<p>如果遇到版本不兼容报错,降级路径是:GX 跑出结果 → 用脚本推 DataHub REST API → 同样效果,只是少了一层自动化。</p>
+
+<div class="exercise">
+  <h3>练习 5.1 · 为你的场景写 10 条 expectation <span class="badge">15 min</span></h3>
+  <p>新建 <code>deliverables/dq-rules-v0.1.md</code>。基于 L01 的项目场景,挑<strong>一张最痛的表</strong>(如用户表/订单表/事件表),写 10 条 expectation:</p>
+  <pre><code># DQ 规则清单 v0.1
+
+> 表:[贴你的具体表名]
+> 套件名:[table]_suite
+> Owner:[Steward 名字]
+
+## 10 条 expectation
+
+| # | expectation 类                          | 字段        | 参数                  | 维度    | 失败动作        |
+|---:|----------------------------------------|------------|----------------------|---------|----------------|
+|  1 | ExpectColumnToExist                    | user_id    | -                    | 完整性  | 阻断 + 告警     |
+|  2 | ExpectColumnValuesToNotBeNull          | user_id    | -                    | 完整性  | 阻断            |
+|  3 | ExpectColumnValuesToBeUnique           | user_id    | -                    | 唯一性  | 阻断            |
+|  4 | ExpectColumnValuesToBeBetween          | age        | 18-120               | 有效性  | 告警            |
+|  5 | ExpectColumnValuesToBeInSet            | country    | [US,CA,GB,CN,...]    | 有效性  | 告警            |
+|  6 | ExpectColumnValuesToMatchRegex         | email      | ^[^@]+@[^@]+\.[^@]+$ | 有效性  | 告警            |
+|  7 | ExpectColumnValuesToNotBeNull          | created_at | -                    | 完整性  | 阻断            |
+|  8 | ExpectColumnValuesToBeBetween(max_ts)  | created_at | ≤ now()              | 有效性  | 告警(未来数据) |
+|  9 | [自己加,如跨表一致性]                  |            |                      | 一致性  |                |
+| 10 | [自己加,如时效性]                      | updated_at | > now()-1day         | 时效性  | 告警            |
+
+## 失败处理约定
+- 阻断级:Pipeline 停,值班 Steward 接到告警 30 分钟内响应
+- 告警级:进 DQ 看板,周会复盘
+- 通知渠道:Slack #data-quality + 邮件</code></pre>
+</div>
+
+<!-- ====================================================== -->
+<hr class="sep">
+
+<h2 id="recap">本课要点回顾</h2>
+
+<ol>
+  <li><strong>质量 = 可度量维度</strong>:完整性/唯一性/有效性/一致性可机器化,时效性靠 SLA,准确性靠业务。</li>
+  <li><strong>GX Core 1.x API</strong>:class-based <code>gx.expectations.Expect*</code>,旧 <code>validator.expect_*</code> 已废。</li>
+  <li><strong>三对象</strong>:Expectation(断言)→ Suite(契约)→ Checkpoint(执行)。</li>
+  <li><strong>包名 <code>great_expectations</code></strong>,不是 gx,但 import 别名是 gx。</li>
+  <li><strong>Data Docs 必须 FileDataContext</strong>:ephemeral 模式跑校验但不能出报告。</li>
+  <li><strong>工具是手段不是目的</strong>:规则设计和 Owner 归属比工具选型更重要。</li>
+</ol>
+
+<h2 id="primary-source">推荐一手阅读</h2>
+
+<p>
+<strong>本课主源</strong>:<a href="https://docs.greatexpectations.io/docs/core/introduction/try_gx/" target="_blank" rel="noopener">GX Core 官方 Try GX(2026)</a>。本课代码直接脱胎于此,出问题回官方文档对。
+</p>
+
+<p>
+<strong>期望库</strong>:<a href="https://docs.greatexpectations.io/docs/core/define_expectations/expectations/default_expectations/" target="_blank" rel="noopener">所有内置 expectation 参考表</a>。需要什么校验,先在这查有没有现成的。
+</p>
+
+<p>
+<strong>从 0.18 迁移</strong>:<a href="https://docs.greatexpectations.io/docs/0.18/reference/learn/migration_guide/" target="_blank" rel="noopener">V0 → V1 迁移指南</a>。如果你之前用过 GX,这是必读。
+</p>
+
+<h2 id="next">下一课预告</h2>
+
+<p>
+<strong>第 06 课 · 数据血缘:OpenLineage / Marquez PoC</strong>。
+质量告诉你"数据好不好",血缘告诉你"数据从哪来、怎么变"。我们用 <strong>OpenLineage 标准 + Marquez 参考实现</strong>给一个简单的 ETL 跑通血缘采集,在 UI 看到端到端流向。技术三连的最后一课。
+</p>
+
+<div class="ask-teacher">
+<strong>有疑问就问老师(我)</strong>。卡点比如:GX 装不上贴 <code>pip install</code> 错误、脚本跑不起来贴完整 traceback、不知道某字段该选哪条 expectation、DataHub 集成报版本错。技术课就是要贴日志,我帮你拆。
+</div>
+
+</main>
+
+<footer class="lesson">
+  <div>
+    <a href="../../index.html">总览</a> ·
+    <a href="0004-metadata-catalog-datahub.html">← L04</a> ·
+    <a href="#">L06 数据血缘 →</a>
+  </div>
+  <div>Lesson 05 · Data Quality (GX Core 1.x PoC)</div>
+</footer>
+
+</body>
+</html>
