@@ -1,0 +1,196 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="theme-color" content="#fefefe" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#1a1814" media="(prefers-color-scheme: dark)">
+<meta name="description" content="量化数学第 07 课:时间序列建模。ARIMA 刻画收益自相关,GARCH 刻画波动率聚类。L02 预告的幻觉在这里用模型解决。">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<title>第 07 课 · 时间序列:ARIMA + GARCH</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
+<script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
+<script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"
+        onload="renderMathInElement(document.body,{delimiters:[{left:'$$',right:'$$',display:true},{left:'$',right:'$',display:false}]});"></script>
+<link rel="stylesheet" href="../assets/course.css">
+<script src="../assets/quiz.js" defer></script>
+</head>
+<body>
+
+<header class="lesson">
+  <div class="crumb">
+    <a href="../../index.html">总览</a> ·
+    <a href="0006-fama-french-factors.html">← L06</a> ·
+    Lesson <strong>07</strong>
+  </div>
+  <h1>时间序列:ARIMA + GARCH</h1>
+  <p class="subtitle">前 6 课都是静态/横截面视角。L02 预告过"波动率聚类"需 GARCH,本课兑现承诺 —— 正式进入时间序列建模。</p>
+  <div class="meta">节奏:约 45 分钟</div>
+</header>
+
+<main>
+
+<p>
+L01-L06 我们把收益当成 i.i.d. 抽样(独立同分布)。但金融数据有<strong>时间结构</strong>:收益本身接近无自相关(弱有效市场),但波动率有强聚类(L02 已实证)。这一课用两个模型分别处理这两个事实:<strong>ARIMA</strong> 刻画均值自相关,<strong>GARCH</strong> 刻画方差聚类。
+</p>
+
+<div class="deliverable">
+  <div class="label">本课产出</div>
+  <ol style="margin:0; padding-left:1.3rem;">
+    <li>理解 <strong>ARIMA(p,d,q)</strong> 的含义和定阶</li>
+    <li>推导 <strong>GARCH(1,1)</strong> 并理解它如何捕捉波动率聚类</li>
+    <li>Python 用 <code>arch</code> 库跑 GARCH,提取条件波动率</li>
+    <li>看懂为什么"GARCH 比 L02 的历史窗口波动率更现实"</li>
+  </ol>
+</div>
+
+<h2 id="arima">1. ARIMA:建模均值自相关</h2>
+<p>ARIMA(p, d, q) 三个参数:</p>
+<ul>
+  <li><strong>p</strong>:AR(自回归)阶数 —— $r_t$ 依赖过去 $p$ 期</li>
+  <li><strong>d</strong>:差分阶数 —— 把非平稳序列变平稳</li>
+  <li><strong>q</strong>:MA(滑动平均)阶数 —— $r_t$ 依赖过去 $q$ 期冲击</li>
+</ul>
+<p>AR(p) 模型:</p>
+<p class="math display">
+$$r_t = c + \phi_1 r_{t-1} + \phi_2 r_{t-2} + \cdots + \phi_p r_{t-p} + \varepsilon_t$$
+</p>
+
+<div class="callout warn">
+  <div class="label">⚠ 金融收益的 ARIMA 通常"什么都不要"</div>
+  <p style="margin:0;">
+  对日度对数收益,$d=1$(价格 $P_t$ 是 I(1),收益 $r_t$ 已平稳),且 <strong>p=q=0 是常态</strong>(收益无自相关,弱有效市场)。也就是说 <strong>ARIMA(0,1,0)</strong> 就够。如果你的 AR 模型在收益上挖出强显著的 $\phi$,要么是<strong>数据 bug</strong>,要么是<strong>极低频可预测性</strong>(套利资金会迅速抹掉)。收益自相关不是量化的主战场 —— <strong>波动率聚类才是</strong>。
+  </p>
+</div>
+
+<h2 id="arch-garch">2. GARCH:建模波动率聚类</h2>
+<p>核心思想:<strong>方差本身是时变的,且依赖过去的方差和冲击</strong>。Engle 1982 提出 ARCH, Bollerslev 1986 推广到 GARCH。</p>
+
+<p class="math display">
+$$\text{GARCH}(1,1): \quad \sigma_t^2 = \omega + \alpha \varepsilon_{t-1}^2 + \beta \sigma_{t-1}^2$$
+</p>
+
+<p>三项含义:</p>
+<table>
+  <thead><tr><th>项</th><th>含义</th></tr></thead>
+  <tbody>
+    <tr><td>$\omega > 0$</td><td>长期方差基线</td></tr>
+    <tr><td>$\alpha \varepsilon_{t-1}^2$</td><td>昨天的大冲击 → 今天波动更大(ARCH 项)</td></tr>
+    <tr><td>$\beta \sigma_{t-1}^2$</td><td>昨天的高波动 → 今天也高(GARCH 项,持续性)</td></tr>
+  </tbody>
+</table>
+
+<div class="callout">
+  <div class="label">GARCH 如何捕捉聚类</div>
+  <p style="margin:0;">
+  如果昨天有大冲击($\varepsilon_{t-1}^2$ 大),或昨天波动高($\sigma_{t-1}^2$ 大),今天 $\sigma_t^2$ 就大 —— <strong>大波动跟着大波动</strong>。<strong>这就是 L02 看到的"波动率聚类"的数学表达</strong>。实证中 $\alpha + \beta \approx 0.99$(持续性极强),意味着波动率的"记忆"很长。
+  </p>
+</div>
+
+<p class="sidenote">
+<strong>无条件方差</strong>:GARCH(1,1) 的长期方差 $\bar{\sigma}^2 = \omega / (1 - \alpha - \beta)$。要求 $\alpha + \beta < 1$(平稳性)。接近 1 意味着强持续、慢回归均值。
+</p>
+
+<h2 id="python-garch">3. Python:用 <code>arch</code> 跑 GARCH</h2>
+<pre><code># pip install arch yfinance
+import yfinance as yf
+from arch import arch_model
+import numpy as np
+
+sp = yf.download("^GSPC", "2015-01-01", "2024-12-31")["Close"]
+rets = 100 * np.log(sp / sp.shift(1)).dropna()  # 单位 %
+
+# 拟合 GARCH(1,1) - 默认正态假设
+am = arch_model(rets, mean="Constant", vol="GARCH", p=1, q=1)
+res = am.fit(update_freq=0)
+print(res.summary())
+
+# 提取条件波动率(时变 σ_t)
+cond_vol = res.conditional_volatility
+print(f"\n平均条件波动率: {cond_vol.mean():.3f}%/日")
+print(f"最高波动率时点: {cond_vol.idxmax()} ({cond_vol.max():.3f}%)")</code></pre>
+
+<div class="callout produce">
+  <div class="label">典型结果</div>
+  <pre style="margin:0; background:none; padding:0; border:none;"><code>omega(ω) : 0.025  (p&lt;0.01)
+alpha(α) : 0.089  (p&lt;0.01)
+beta(β)  : 0.908  (p&lt;0.01)
+α + β    : 0.997  (强持续,慢回归均值)</code></pre>
+</div>
+
+<div class="callout">
+  <div class="label">解读</div>
+  <p style="margin:0;">
+  $\beta = 0.908$ 占主导 → 波动率主要靠"昨天的波动 + 一点冲击"决定,记忆长。$\alpha + \beta = 0.997$ 接近 1 → <strong>波动率的"遗忘"很慢</strong>。危机期波动率高,会持续一段时间才回落。<strong>提取出的 <code>cond_vol</code> 就是时变波动率序列</strong>,比 L02 的固定窗口波动率更精确。
+  </p>
+</div>
+
+<h2 id="beyond-normal">4. GARCH 的延伸:t 分布残差</h2>
+<p>L02 证明残差<strong>肥尾</strong>。GARCH 假设正态残差会低估尾部。改进:让残差服从 <strong>Student-t 分布</strong>:</p>
+<pre><code>am = arch_model(rets, mean="Constant", vol="GARCH", p=1, q=1, dist="t")
+res = am.fit(update_freq=0)
+# 看 t 分布自由度(越低 = 越肥尾)</code></pre>
+
+<div class="quiz" data-correct="c">
+  <div class="q">GARCH(1,1) 中 $\alpha + \beta = 0.98$,含义是?</div>
+  <ul>
+    <li data-k="a">残差是正态分布</li>
+    <li data-k="b">波动率恒定不变</li>
+    <li data-k="c">波动率有强持续性,慢回归均值</li>
+    <li data-k="d">模型错误,应丢弃</li>
+  </ul>
+  <div class="reveal">
+  <strong>答案:C</strong>。$\alpha + \beta$ 接近 1 → <strong>波动率的"记忆"很长</strong>(GARCH 平稳性要求 $\alpha + \beta < 1$,接近 1 意味着接近非平稳但还平稳)。这就是为什么危机期波动率高,会持续很久才回落 —— <strong>这正是 L02 的"波动率聚类"</strong>。A 无关(残差分布另算);B 错($\alpha = \beta = 0$ 才恒定);D 错(0.98 < 1,模型合法)。
+  </div>
+</div>
+
+<div class="quiz" data-correct="b">
+  <div class="q">为什么金融收益通常 ARIMA(0,1,0) 就够,但波动率必须用 GARCH?</div>
+  <ul>
+    <li data-k="a">收益无方差,波动率有方差</li>
+    <li data-k="b">收益无自相关,但方差有时变聚类</li>
+    <li data-k="c">ARIMA 比 GARCH 难</li>
+    <li data-k="d">GARCH 取代了 ARIMA</li>
+  </ul>
+  <div class="reveal">
+  <strong>答案:B</strong>。弱有效市场 → 收益本身无自相关(ARIMA 退化为常数 + 白噪,即 (0,1,0));但<strong>方差有时变聚类</strong>(L02 实证过 $r^2$ 有强自相关),必须用 GARCH 建模。这就是为什么金融时间序列的标准模型常是 <strong>ARIMA(0,1,0) + GARCH(1,1) 组合</strong>。A 错(收益当然有方差);C/D 无关。
+  </div>
+</div>
+
+<h2 id="recap">本课要点</h2>
+<ul>
+  <li><strong>ARIMA(p,d,q)</strong>:建模均值自相关;金融收益通常 (0,1,0) 即可。</li>
+  <li><strong>GARCH(1,1)</strong>:$\sigma_t^2 = \omega + \alpha\varepsilon_{t-1}^2 + \beta\sigma_{t-1}^2$,刻画波动率聚类。</li>
+  <li><strong>$\alpha + \beta$ 接近 1</strong> = 波动率强持续,慢回归均值。</li>
+  <li><strong>提取 <code>conditional_volatility</code></strong> 得到时变 $\sigma_t$,比固定窗口波动率精确。</li>
+  <li><strong>GARCH + t 分布残差</strong> = 同时处理聚类和肥尾,实证标配。</li>
+</ul>
+
+<h2 id="primary-source">推荐主源</h2>
+<p>
+<strong>本课主源</strong>:<a href="https://onlinelibrary.wiley.com/doi/book/10.1002/9780470644560" target="_blank" rel="noopener">Tsay《Analysis of Financial Time Series》Ch. 3 (ARIMA) + Ch. 4 (ARCH/GARCH)</a>。这是 GARCH 入门的标准教材。
+</p>
+
+<h2 id="next">下一课预告(终课)</h2>
+<p>
+<strong>第 08 课 · Black-Scholes 与伊藤引理直觉(终课)</strong>。
+横截面(L01-L06)和时间序列(L07)学完,最后一块拼图是<strong>连续时间</strong>:期权定价。Black-Scholes 1973 用几何布朗运动 + 伊藤引理 + 无套利,推出期权定价闭式公式。本课推导 BS 公式,用伊藤引理的直觉解释为什么会出现 $\sigma$ 和 $N(\cdot)$。
+</p>
+
+<div class="ask-teacher">
+有疑问就问:ARIMA 定阶怎么选(p/q)?GARCH 参数怎么解读?为什么 t 分布残差比正态好?你的 <code>arch</code> 报错贴出来,我帮你看。
+</div>
+
+</main>
+
+<footer class="lesson">
+  <div>
+    <a href="../../index.html">总览</a> ·
+    <a href="0006-fama-french-factors.html">← L06</a> ·
+    <a href="#">L08 →</a>
+  </div>
+  <div>Lesson 07 · ARIMA + GARCH</div>
+</footer>
+
+</body>
+</html>

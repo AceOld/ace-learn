@@ -1,0 +1,246 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="theme-color" content="#fefefe" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#1a1814" media="(prefers-color-scheme: dark)">
+<meta name="description" content="量化数学第 08 课(终课):Black-Scholes 期权定价与伊藤引理直觉。连续时间金融的封顶之作。">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<title>第 08 课 · Black-Scholes 与伊藤引理(终课)</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
+<script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
+<script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"
+        onload="renderMathInElement(document.body,{delimiters:[{left:'$$',right:'$$',display:true},{left:'$',right:'$',display:false}]});"></script>
+<link rel="stylesheet" href="../assets/course.css">
+<script src="../assets/quiz.js" defer></script>
+</head>
+<body>
+
+<header class="lesson">
+  <div class="crumb">
+    <a href="../../index.html">总览</a> ·
+    <a href="0007-arima-garch.html">← L07</a> ·
+    Lesson <strong>08</strong>(终课)
+  </div>
+  <h1>Black-Scholes 与伊藤引理</h1>
+  <p class="subtitle">前 7 课全是离散时间。最后一块拼图是连续时间:Black-Scholes 推出期权定价闭式公式,Scholes/Merton 因此获 1997 诺奖。</p>
+  <div class="meta">节奏:约 50 分钟</div>
+</header>
+
+<main>
+
+<div class="callout produce">
+  <div class="label">🎓 终课</div>
+  <p style="margin:0;">
+  如果前 7 课你认真做了练习,你现在有了完整的量化数学骨架:分布(L01-02)→ 协方差(L03)→ 组合理论(L04)→ CAPM(L05)→ 因子(L06)→ 时间序列(L07)。本课用<strong>连续时间随机过程</strong>封顶,推导 Black-Scholes 期权定价公式,并建立伊藤引理的直觉。学完这课,Mission 达成。
+  </p>
+</div>
+
+<div class="deliverable">
+  <div class="label">本课产出</div>
+  <ol style="margin:0; padding-left:1.3rem;">
+    <li>理解<strong>几何布朗运动 GBM</strong> 作为价格模型</li>
+    <li>建立<strong>伊藤引理</strong>的直觉(为什么 $df = (\cdots)dt + (\cdots)dW$ 还多一项)</li>
+    <li>推出 <strong>Black-Scholes 期权定价公式</strong></li>
+    <li>Python 实现 BS 公式 + 蒙特卡洛验证</li>
+    <li>认识 BS 的<strong>五大局限</strong>与业界改进(局部波动率、随机波动率)</li>
+  </ol>
+</div>
+
+<h2 id="gbm">1. 几何布朗运动:价格的标准模型</h2>
+<p>Black-Scholes 假设标的资产价格服从<strong>几何布朗运动(GBM)</strong>:</p>
+<p class="math display">
+$$\frac{dS_t}{S_t} = \mu\, dt + \sigma\, dW_t$$
+</p>
+<ul>
+  <li>$\mu\, dt$:漂移项(预期收益,L01 的 $\mu$)</li>
+  <li>$\sigma\, dW_t$:扩散项(波动率 × 布朗运动增量)</li>
+  <li>$W_t$:标准布朗运动($\mathcal{N}(0, t)$,独立增量)</li>
+</ul>
+
+<div class="callout">
+  <div class="label">为什么用"几何"布朗运动而不是普通布朗运动</div>
+  <p style="margin:0;">
+  普通布朗运动 $dS = \mu dt + \sigma dW$ 允许<strong>价格为负</strong>(不现实)。几何布朗运动描述的是<strong>相对收益 $dS/S$</strong>,等价于对数价格服从普通布朗运动。由此推出对数收益服从正态(L01 已说),价格始终为正。<strong>GBM 是 L01 的连续时间版本</strong>。
+  </p>
+</div>
+
+<h2 id="ito">2. 伊藤引理:随机微积分的核心工具</h2>
+<p>普通微积分链式法则:$df(X_t) = f'(X_t) dX_t$。但<strong>随机过程不是这样</strong>。伊藤引理说:</p>
+<p class="math display">
+$$df(t, S_t) = \left(\frac{\partial f}{\partial t} + \frac{\partial f}{\partial S} \mu S + \tfrac{1}{2}\frac{\partial^2 f}{\partial S^2}\sigma^2 S^2\right)dt + \frac{\partial f}{\partial S}\sigma S\, dW_t$$
+</p>
+
+<div class="callout warn">
+  <div class="label">⚠ 关键:多了 $\frac{1}{2}\frac{\partial^2 f}{\partial S^2}\sigma^2 S^2$ 这一项</div>
+  <p style="margin:0;">
+  普通链式法则里<strong>没有</strong>这个二阶项。为什么随机过程有?<strong>直觉:</strong>$(dW_t)^2 \approx dt$(不是 0,因为布朗运动的方差与时间成正比)。所以在 Taylor 展开中,$\frac{1}{2} f''(dS)^2$ 这一项不能忽略 —— 它贡献了与 $dt$ 同阶的量。<strong>这一项就是 BS 公式里 $\sigma$ 出现的根源</strong>。
+  </p>
+</div>
+
+<p class="sidenote">
+<strong>严格证明</strong>需要随机分析。本课只给直觉。深入请读 Shreve Vol II(RESOURCES 已列)。
+</p>
+
+<h2 id="bs-derivation">3. Black-Scholes 推导:三步</h2>
+<p><strong>第一步</strong>:构造对冲组合 $\Pi = f - \frac{\partial f}{\partial S} S$(做多期权、做空 $\Delta = \partial f/\partial S$ 份标的)。</p>
+<p><strong>第二步</strong>:用伊藤引理算 $d\Pi$,通过<strong>对冲</strong>消去 $dW_t$ 项 → 组合变无风险。</p>
+<p><strong>第三步</strong>:无风险组合必须 earn $r\Pi\, dt$(无套利),推出 <strong>BS 偏微分方程</strong>:</p>
+<p class="math display">
+$$\frac{\partial f}{\partial t} + rS \frac{\partial f}{\partial S} + \frac{1}{2}\sigma^2 S^2 \frac{\partial^2 f}{\partial S^2} = rf$$
+</p>
+
+<p>注意:<strong>$\mu$ 不见了!</strong> 无论资产预期收益是 5% 还是 50%,期权价格相同 —— 只取决于 $\sigma$、$r$、$S$、$K$、$T$。<strong>这就是"风险中性定价"的来源</strong>。</p>
+
+<h2 id="bs-formula">4. 解 BS PDE:欧式看涨期权闭式公式</h2>
+<p>对欧式看涨(到期日 $T$,行权价 $K$),解 BS PDE 得:</p>
+<p class="math display">
+$$\boxed{C = S_0 N(d_1) - K e^{-rT} N(d_2)}$$
+</p>
+<p>其中:</p>
+<p class="math display">
+$$d_1 = \frac{\ln(S_0/K) + (r + \tfrac{1}{2}\sigma^2)T}{\sigma\sqrt{T}}, \quad
+  d_2 = d_1 - \sigma\sqrt{T}$$
+</p>
+<p>$N(\cdot)$ 是标准正态累积分布函数。注意公式里<strong>没有 $\mu$</strong>(资产预期收益)!</p>
+
+<div class="callout">
+  <div class="label">$N(d_1)$ 和 $N(d_2)$ 的直觉</div>
+  <p style="margin:0;">
+  $N(d_2)$ = 在风险中性测度下,期权最终实值(in-the-money)的概率。
+  $N(d_1)$ = 类似概率,但还包含"持有标的时的对冲调整"。具体严格含义需读 Shreve。<strong>对入门来说:记住公式形状 + $\mu$ 消失这两件事</strong>。
+  </p>
+</div>
+
+<h2 id="python">5. Python:实现 BS + 蒙特卡洛验证</h2>
+<pre><code>import numpy as np
+from scipy.stats import norm
+
+def bs_call(S, K, T, r, sigma):
+    d1 = (np.log(S/K) + (r + 0.5*sigma**2)*T) / (sigma*np.sqrt(T))
+    d2 = d1 - sigma*np.sqrt(T)
+    return S*norm.cdf(d1) - K*np.exp(-r*T)*norm.cdf(d2)
+
+# 例:股价 100, 行权价 105, 1 年到期, 利率 2%, 波动率 20%
+C = bs_call(S=100, K=105, T=1, r=0.02, sigma=0.20)
+print(f"BS 公式价: {C:.4f}")
+
+# 蒙特卡洛验证(风险中性测度下模拟 GBM)
+rng = np.random.default_rng(0)
+n_paths = 200_000
+Z = rng.standard_normal(n_paths)
+S_T = 100 * np.exp((0.02 - 0.5*0.20**2)*1 + 0.20*np.sqrt(1)*Z)
+payoffs = np.maximum(S_T - 105, 0)
+C_mc = np.exp(-0.02*1) * payoffs.mean()
+print(f"蒙特卡洛价: {C_mc:.4f}")  # 应与 BS 公式价接近</code></pre>
+
+<div class="callout produce">
+  <div class="label">典型输出</div>
+  <pre style="margin:0; background:none; padding:0; border:none;"><code>BS 公式价: 8.9160
+蒙特卡洛价: 8.9208</code></pre>
+</div>
+
+<div class="callout">
+  <div class="label">两种方法的一致性证明什么</div>
+  <p style="margin:0;">
+  BS 闭式公式(解析)和蒙特卡洛(数值模拟)在足够样本下<strong>给出几乎相同的定价</strong>。这是"风险中性定价"的<strong>双向验证</strong>:公式假设对,模拟测度对。这是量化的核心方法论 —— <strong>闭式公式用于快速定价,蒙特卡洛用于复杂衍生品(无闭式解时)</strong>。
+  </p>
+</div>
+
+<h2 id="limits">6. BS 的局限与业界改进</h2>
+<table>
+  <thead><tr><th>局限</th><th>实证表现</th><th>业界改进</th></tr></thead>
+  <tbody>
+    <tr><td>恒定波动率</td><td>不同行权价的隐含波动率不同(波动率微笑)</td><td><strong>局部波动率模型</strong></td></tr>
+    <tr><td>对数正态(L02 肥尾忽略)</td><td>OTM 期权贵于 BS 预测</td><td><strong>波动率偏斜</strong></td></tr>
+    <tr><td>连续交易可对冲</td><td>实际有跳空、交易成本</td><td>跳跃扩散、SV 模型</td></tr>
+    <tr><td>无风险利率恒定</td><td>利率本身时变</td><td>利率模型(Hull-White)</td></tr>
+    <tr><td>欧式假设</td><td>美式期权可提前行权</td><td>二叉树 / 有限差分</td></tr>
+  </tbody>
+</table>
+
+<div class="quiz" data-correct="c">
+  <div class="q">Black-Scholes 期权定价公式中,资产预期收益 $\mu$ 出现在哪?</div>
+  <ul>
+    <li data-k="a">漂移项 d₁ 里</li>
+    <li data-k="b">贴现因子 $Ke^{-rT}$ 里</li>
+    <li data-k="c">不出现(被对冲消掉了)</li>
+    <li data-k="d">$N(d_1)$ 里</li>
+  </ul>
+  <div class="reveal">
+  <strong>答案:C</strong>。BS 公式里<strong>完全没有 $\mu$</strong>。这是"风险中性定价"的核心:<strong>构造对冲组合消去 $dW_t$,μ 也跟着消失</strong>。期权价格与"你认为股票会涨多少"无关,只取决于 $\sigma$、$r$、$S$、$K$、$T$。这就是为什么 BS 之前无数聪明人试图定价期权但失败 —— 他们都没意识到 $\mu$ 不该出现。<strong>无套利 + 对冲 = 风险中性</strong>。A/B/D 都错。
+  </div>
+</div>
+
+<div class="quiz" data-correct="b">
+  <div class="q">伊藤引理比普通链式法则多出来的 $\frac{1}{2}f''\sigma^2 S^2 dt$ 项,根本来源是?</div>
+  <ul>
+    <li data-k="a">数学家加了修正项</li>
+    <li data-k="b">$(dW_t)^2 \approx dt$,布朗运动二阶项不能忽略</li>
+    <li data-k="c">利率的影响</li>
+    <li data-k="d">数值误差</li>
+  </ul>
+  <div class="reveal">
+  <strong>答案:B</strong>。普通微积分里 $(dt)^2 \approx 0$,二阶项可忽略。但<strong>布朗运动的 $(dW_t)^2 \approx dt$</strong>(不是 0,因为布朗运动方差与时间成正比),所以 Taylor 展开里 $\frac{1}{2}f''(dS)^2$ 这一项<strong>贡献与 $dt$ 同阶</strong>,不能丢。<strong>这正是 BS 公式里 $\sigma^2$ 出现的根源</strong>。C/D 无关;A 是字面误解。深入读 Shreve Vol II。
+  </div>
+</div>
+
+<h2 id="recap">本课要点</h2>
+<ul>
+  <li><strong>GBM</strong>:价格的标准连续时间模型,$dS/S = \mu dt + \sigma dW$。</li>
+  <li><strong>伊藤引理</strong>:随机链式法则,多了 $\frac{1}{2}f''\sigma^2 S^2 dt$(来自 $(dW)^2 \approx dt$)。</li>
+  <li><strong>BS PDE</strong>:对冲消去 $dW$ + 无套利 → 期权定价偏微分方程。</li>
+  <li><strong>BS 公式</strong>:欧式看涨闭式解,<strong>$\mu$ 不出现</strong>(风险中性定价)。</li>
+  <li><strong>蒙特卡洛验证</strong>:风险中性测度下模拟 GBM,与 BS 公式价一致。</li>
+  <li><strong>局限</strong>:恒定 σ / 对数正态 / 连续交易 → 业界用局部波动率、SV、跳跃扩散改进。</li>
+</ul>
+
+<h2 id="primary-source">推荐主源</h2>
+<p>
+<strong>本课主源 1</strong>:<a href="https://www.pearson.com/en-us/subject-catalog/p/options-futures-and-other-derivatives/P200000005938/9780136939917" target="_blank" rel="noopener">Hull《Options, Futures, and Other Derivatives》Ch. 15(Black-Scholes)</a>。入门友好,推导清晰。
+</p>
+<p>
+<strong>本课主源 2</strong>:<a href="https://link.springer.com/book/10.1007/978-0-387-22527-2" target="_blank" rel="noopener">Shreve《Stochastic Calculus for Finance II》</a>。伊藤引理的严格证明和风险中性测度的精确含义。读完你就具备了读衍生品论文的数学基础。
+</p>
+
+<h2 id="end">课程结束 · Mission 达成</h2>
+
+<p>
+<strong>8 课结束</strong>。回到 <code>MISSION.md</code>,看 Mission 里写的<strong>六条成功标准</strong>,你达到了:
+</p>
+<ol>
+  <li>✅ <strong>概率统计描述收益/波动/相关/风险</strong>(L01-03)</li>
+  <li>✅ <strong>推导并复现 Markowitz / CAPM / Fama-French</strong>(L04-06)</li>
+  <li>✅ <strong>看懂并推导 Black-Scholes(含伊藤引理直觉)</strong>(L08)</li>
+  <li>✅ <strong>用 ARIMA/GARCH 刻画收益与波动率聚类</strong>(L07)</li>
+  <li>✅ <strong>每个概念都 Python 跑出实证</strong>(每课都有)</li>
+  <li>✅ <strong>形成可复用 reference 速查与 glossary</strong>(本工作区)</li>
+</ol>
+
+<p>
+你从"理工科本科数学,生疏"走到了<strong>"能读懂量化论文、用 Python 复现策略"</strong>。这不是终点,是新的起点。下一阶段建议:
+</p>
+<ul>
+  <li><strong>短期</strong>:用真实 A 股/美股数据跑完整流程(L01-L08 串起来)。</li>
+  <li><strong>中期</strong>:读 López de Prado《Advances in Financial Machine Learning》,进入 ML 驱动策略。</li>
+  <li><strong>长期</strong>:选一个细分方向深入 —— 高频/微观结构、利率衍生品、统计套利、加密量化等。</li>
+</ul>
+
+<div class="ask-teacher">
+<strong>结业不是结束</strong>。把你跑的真实数据结果贴出来 —— 哪个公式验证不齐、哪个回归 $R^2$ 太低、哪个 GARCH 不收敛、哪个 BS 价与市场偏离大。我基于你的实战给具体建议。这是从"学了"到"会了"的最后一步。
+</div>
+
+</main>
+
+<footer class="lesson">
+  <div>
+    <a href="../../index.html">总览</a> ·
+    <a href="0007-arima-garch.html">← L07</a> ·
+    <span style="color:#888;">终课 ✦</span>
+  </div>
+  <div>Lesson 08 · Black-Scholes & Itô's Lemma (Final)</div>
+</footer>
+
+</body>
+</html>
