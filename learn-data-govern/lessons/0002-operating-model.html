@@ -1,0 +1,353 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="theme-color" content="#fefefe" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#1a1814" media="(prefers-color-scheme: dark)">
+<meta name="description" content="数据治理第 02 课:对比中央化 / 联邦化 / 非侵入三种运营模型,产出 RACI 角色矩阵与 Council 议程模板。">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<title>第 02 课 · 运营模型:治理的人怎么排</title>
+<link rel="stylesheet" href="../assets/course.css">
+<script src="../assets/quiz.js" defer></script>
+</head>
+<body>
+
+<header class="lesson">
+  <div class="crumb">
+    <a href="../../index.html">总览</a> ·
+    <a href="0001-launch-with-dmbok-and-charter.html">← L01</a> ·
+    Lesson <strong>02</strong>
+  </div>
+  <h1>运营模型(Operating Model)—— 治理的人怎么排</h1>
+  <p class="subtitle">章程写了"要有 Sponsor/Owner/Steward/Council",但这些角色怎么开会、谁拍板、Steward 是全职还是兼职 —— 这是运营模型。</p>
+  <div class="meta">
+    节奏:约 60 分钟 · 产出物:RACI 矩阵 + Council 议程模板 + 模型选型
+  </div>
+</header>
+
+<main>
+
+<p>
+上一课你的章程 v0.1 写下了五个角色:Sponsor、Owner、Steward、Council、Custodian。但<strong>纸上的角色不会自动运作</strong>。本课解决三个具体问题:
+</p>
+<ol>
+  <li>这些人<strong>怎么开会</strong>?(Council 议程长什么样?)</li>
+  <li>每个决策<strong>谁拍板</strong>?Steward 负责的事 Owner 能不能否决?</li>
+  <li>我的组织该选<strong>哪种形态</strong>?(中央化 / 联邦化 / 非侵入)</li>
+</ol>
+
+<div class="deliverable">
+  <div class="label">本课产出物</div>
+  <ol style="margin:0; padding-left:1.3rem;">
+    <li><strong>角色 RACI 矩阵</strong> —— 把章程的五个角色落到 10 个典型治理动作上</li>
+    <li><strong>Council 议程模板 v0.1</strong> —— 一份开箱即用的 60 分钟会议模板</li>
+    <li><strong>运营模型选型决定</strong> —— 你为自己的场景选了哪种,为什么</li>
+  </ol>
+</div>
+
+<!-- ====================================================== -->
+<h2 id="three-models">1. 三种典型运营模型(20 分钟)</h2>
+
+<p>
+"运营模型"听起来抽象,其实就是回答一个问题:<strong>治理的决策权与执行权在组织里怎么分布</strong>。Seiner 在 <a href="https://technicspub.com/nidg/" target="_blank" rel="noopener"><em>Non-Invasive Data Governance</em></a> 里把答案归纳为三种典型形态。下面三张对比表是本课最值得记的东西。
+</p>
+
+<h3>形态 A:中央化(Centralized)</h3>
+
+<p>成立一个<strong>独立的治理团队/部门</strong>,所有规则、标准、决策由这个团队出,业务部门执行。</p>
+
+<table>
+  <thead><tr><th>维度</th><th>表现</th></tr></thead>
+  <tbody>
+    <tr><td>决策速度</td><td>慢(集中决策,流程长)</td></tr>
+    <tr><td>规则一致性</td><td>★★★★★(单一来源)</td></tr>
+    <tr><td>业务贴近度</td><td>★★(容易脱节)</td></tr>
+    <tr><td>启动成本</td><td>高(要立新组织、招新角色)</td></tr>
+    <tr><td>适合谁</td><td>强监管行业(银行、保险)、合规驱动</td></tr>
+    <tr><td>典型失败模式</td><td>"治理团队不懂业务,出的规则用不了"</td></tr>
+  </tbody>
+</table>
+
+<h3>形态 B:联邦化(Federated / Hybrid)</h3>
+
+<p><strong>中央 + 业务侧 Steward 网络</strong>:中央定框架和原则,各业务域有自己的 Steward 执行细则。这是<strong>大组织的默认选择</strong>。</p>
+
+<table>
+  <thead><tr><th>维度</th><th>表现</th></tr></thead>
+  <tbody>
+    <tr><td>决策速度</td><td>中(框架中央定、细则本地定)</td></tr>
+    <tr><td>规则一致性</td><td>★★★★(框架统一,细则允许差异)</td></tr>
+    <tr><td>业务贴近度</td><td>★★★★(Steward 在业务侧)</td></tr>
+    <tr><td>启动成本</td><td>中(不立新部门,但要找对人)</td></tr>
+    <tr><td>适合谁</td><td>多业务线的中大型组织、跨地域公司</td></tr>
+    <tr><td>典型失败模式</td><td>Steward 被任命但没时间("兼职挂名")</td></tr>
+  </tbody>
+</table>
+
+<h3>形态 C:非侵入(Non-Invasive, Seiner 招牌)</h3>
+
+<p><strong>不新增角色,不重组组织</strong>。把业务侧<strong>已经在做治理决策的人</strong>正式命名、赋权、记录。Seiner 的核心论点:大多数组织里治理已经在发生,只是没人叫它治理。</p>
+
+<table>
+  <thead><tr><th>维度</th><th>表现</th></tr></thead>
+  <tbody>
+    <tr><td>决策速度</td><td>快(沿用现有决策路径)</td></tr>
+    <tr><td>规则一致性</td><td>★★★(需要主动梳理才提升)</td></tr>
+    <tr><td>业务贴近度</td><td>★★★★★(本来就是业务自己)</td></tr>
+    <tr><td>启动成本</td><td>低(不需重组,只需"正式化")</td></tr>
+    <tr><td>适合谁</td><td>对"治理"两字抵触强、组织根深蒂固、预算紧</td></tr>
+    <tr><td>典型失败模式</td><td>"既然我们已经在做,为啥还要正式化?"(动力不足)</td></tr>
+  </tbody>
+</table>
+
+<div class="callout">
+  <div class="label">关键认知</div>
+  <p style="margin:0;">
+  这三种<strong>不是好坏之分,是适配之分</strong>。Seiner 本人也说:非侵入不是万灵药,强监管行业还是需要中央化骨架。选择依据是<strong>你的组织现实</strong>,不是理论偏好。
+  </p>
+</div>
+
+<div class="quiz" data-correct="c">
+  <div class="q">Q1 · 哪种模型最适合"多业务线、跨地域、规则需统一但执行需本地化"的大公司?</div>
+  <ul>
+    <li data-k="a">中央化,确保规则绝对统一</li>
+    <li data-k="b">非侵入,沿用现有决策路径</li>
+    <li data-k="c">联邦化,框架统一 + 本地执行</li>
+    <li data-k="d">三种混合,看具体业务线</li>
+  </ul>
+  <div class="reveal">
+  <strong>答案:C</strong>。多业务线 + 跨地域 + 需统一规则 + 需本地执行 —— 这是<strong>联邦化的教科书场景</strong>:中央定框架(如术语表主数据规则),业务域 Steward 定本地细则(如某个区域特有的字段口径)。A 在大公司会变成"中央不懂业务";B 在大公司会暴露"本来就没人在统一规则"。D 听起来圆滑,但治理启动期必须选定一种主形态,后续再微调,不要起步就混。
+  </div>
+</div>
+
+<div class="quiz" data-correct="b">
+  <div class="q">Q2 · Seiner 的"非侵入"治理的核心论点是?</div>
+  <ul>
+    <li data-k="a">治理应该悄无声息不让人知道</li>
+    <li data-k="b">把已有决策权正式化而非新建</li>
+    <li data-k="c">绕过业务方由 IT 团队独自治理</li>
+    <li data-k="d">用工具自动化代替人的治理</li>
+  </ul>
+  <div class="reveal">
+  <strong>答案:B</strong>。Seiner 的核心论点:大多数组织里治理<strong>已经在发生</strong>(总有人在决定"客户 ID 怎么定义"),只是<strong>没人叫它治理、没记录、没正式授权</strong>。非侵入 = 把已有的决策者正式命名 + 赋权 + 记录,而不是新建一套组织。A 是字面误解;C 是 IT 主导的老路,正是非侵入要纠偏的;D 是工具崇拜,治理本质是人的问责。
+  </div>
+</div>
+
+<!-- ====================================================== -->
+<h2 id="raci">2. RACI 角色矩阵(20 分钟)</h2>
+
+<h3>为什么需要 RACI</h3>
+
+<p>
+章程写了"要有 Owner、Steward、Custodian",但<strong>每个具体动作谁干、谁批、谁知情</strong>不清楚。结果就是:出问题时所有人推给所有人。RACI 是把<strong>每个治理动作</strong>的权责压成一张表的工具。
+</p>
+
+<table>
+  <thead><tr><th>字母</th><th>角色</th><th>含义</th></tr></thead>
+  <tbody>
+    <tr><td><strong>R</strong></td><td>Responsible</td><td>实际干这件事的人(可以多个)</td></tr>
+    <tr><td><strong>A</strong></td><td>Accountable</td><td>对结果负最终责任的人(<strong>每行只能一个</strong>)</td></tr>
+    <tr><td><strong>C</strong></td><td>Consulted</td><td>事前要被咨询(双向沟通)</td></tr>
+    <tr><td><strong>I</strong></td><td>Informed</td><td>事后被告知(单向通知)</td></tr>
+  </tbody>
+</table>
+
+<div class="callout warn">
+  <div class="label">⚠ 最常见的坑</div>
+  <p style="margin:0;">
+  RACI 的 <strong>A(Accountable)每行必须只有一个</strong>。两个 A = 没人负责(出问题时互相推)。这是 RACI 与"职责分工表"最大的区别,也是检查 RACI 写得好不好的第一标准。
+  </p>
+</div>
+
+<h3>治理场景的 RACI 模板</h3>
+
+<p>下面是 10 个典型治理动作的 RACI 示例。注意 A 列每行只有一个。</p>
+
+<table>
+  <thead>
+    <tr>
+      <th>治理动作</th>
+      <th>Sponsor</th>
+      <th>Owner</th>
+      <th>Steward</th>
+      <th>Custodian</th>
+      <th>Council</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr><td>立项/预算批准</td><td><strong>A</strong></td><td>R</td><td>I</td><td>I</td><td>C</td></tr>
+    <tr><td>定义业务术语(如"活跃用户")</td><td>I</td><td><strong>A</strong></td><td>R</td><td>I</td><td>C</td></tr>
+    <tr><td>审批数据标准</td><td>I</td><td>C</td><td>R</td><td>I</td><td><strong>A</strong></td></tr>
+    <tr><td>字段命名规范</td><td>I</td><td>C</td><td>R</td><td>C</td><td><strong>A</strong></td></tr>
+    <tr><td>配置数据质量规则</td><td>I</td><td>C</td><td><strong>A</strong></td><td>R</td><td>I</td></tr>
+    <tr><td>数据质量问题修复</td><td>I</td><td><strong>A</strong></td><td>R</td><td>R</td><td>I</td></tr>
+    <tr><td>访问权限审批</td><td>I</td><td><strong>A</strong></td><td>C</td><td>R</td><td>I</td></tr>
+    <tr><td>分类分级标注</td><td>I</td><td>C</td><td>R</td><td>I</td><td><strong>A</strong></td></tr>
+    <tr><td>对外数据共享审批</td><td>C</td><td>R</td><td>C</td><td>I</td><td><strong>A</strong></td></tr>
+    <tr><td>季度治理复盘</td><td><strong>A</strong></td><td>R</td><td>R</td><td>I</td><td>R</td></tr>
+  </tbody>
+</table>
+
+<p class="sidenote">
+<strong>读法</strong>:第一行"立项/预算批准",Sponsor 是 A(最终负责),Owner 是 R(实际起草),Steward/Custodian 是 I(被告知),Council 是 C(被咨询)。换句话说,<strong>预算这事 Sponsor 拍板</strong>,其他人提建议和执行。
+</p>
+
+<div class="exercise">
+  <h3>练习 2.1 · 为你的场景写 RACI <span class="badge">15 min</span></h3>
+  <p>新建 <code>deliverables/raci-matrix-v0.1.md</code>(或直接在 L01 的章程文档里加一节)。把上面 10 行复制下来,然后<strong>根据你的项目场景做三件事</strong>:</p>
+  <ol>
+    <li><strong>改名</strong>:把通用角色(Sponsor/Owner/...)改成<strong>具体的人名或岗位</strong>(如"CTO 张总"/"增长部负责人李"/"用户行为 Steward 王")</li>
+    <li><strong>调整动作</strong>:删掉不适用的行,加上你场景特有的行(如电商可能要加"商品类目归属裁决")</li>
+    <li><strong>检查 A 列</strong>:每一行<strong>有且仅有一个</strong> A。多于一个的必须重新指定</li>
+  </ol>
+  <p style="margin-bottom:0;"><strong>真实项目里</strong>:这张表要让所有 A 在一个 30 分钟会议里逐行确认。任一 A 写不上具体人名,说明这个角色在你的组织里还没着落 —— 治理项目会卡在这。</p>
+</div>
+
+<div class="quiz" data-correct="b">
+  <div class="q">Q3 · RACI 矩阵中,每一行的 A(Accountable)数量应该是?</div>
+  <ul>
+    <li data-k="a">至少两个,确保有人监督</li>
+    <li data-k="b">有且仅有一个,负最终责任</li>
+    <li data-k="c">数量不限,看动作复杂度</li>
+    <li data-k="d">最好零个,由集体决策</li>
+  </ul>
+  <div class="reveal">
+  <strong>答案:B</strong>。RACI 的铁律:每行<strong>有且仅有一个 A</strong>。两个 A = 出问题时互相推;零个 A = 这事没人负责。A 是 RACI 与普通职责分工表的根本区别。C 是常见误解("动作复杂就多 A"),恰恰相反,越复杂越要明确单一 A。D 是组织逃避决策的典型症状。
+  </div>
+</div>
+
+<!-- ====================================================== -->
+<h2 id="council">3. Council 议程模板(15 分钟)</h2>
+
+<h3>Council 是什么</h3>
+
+<p>
+Council(数据治理委员会)是<strong>定期(通常每月或每两月)开的跨部门决策会</strong>。它不是工作汇报会,是<strong>裁决会</strong>:Steward 解决不了的争议、跨域的标准、影响多方的变更,在这里拍板。
+</p>
+
+<div class="callout">
+  <div class="label">Council ≠ 工作汇报会</div>
+  <p style="margin:0;">
+  最常见的失败:Council 退化成"各 Steward 上来汇报做了什么"。这浪费所有人时间。Council 的核心价值是<strong>裁决</strong>:带争议的决策上会,无争议的事会前 Steward 自己处理。议程设计必须围绕"裁决项"展开。
+  </p>
+</div>
+
+<h3>60 分钟 Council 议程模板</h3>
+
+<table>
+  <thead><tr><th>时长</th><th>环节</th><th>要点</th></tr></thead>
+  <tbody>
+    <tr><td>5 min</td><td>开场 + 上次 action item 回顾</td><td>只确认"完成/未完成",不展开</td></tr>
+    <tr><td>15 min</td><td><strong>裁决项 #1</strong>(最重要)</td><td>背景 3 min + 讨论 10 min + 拍板 2 min</td></tr>
+    <tr><td>15 min</td><td><strong>裁决项 #2</strong></td><td>同上结构</td></tr>
+    <tr><td>10 min</td><td><strong>裁决项 #3</strong>(如有)</td><td>同上结构</td></tr>
+    <tr><td>10 min</td><td>度量指标快报 + 下次议程预告</td><td>数据,不展开讨论</td></tr>
+    <tr><td>5 min</td><td>总结 action items</td><td>每条有 owner + 截止日</td></tr>
+  </tbody>
+</table>
+
+<p class="sidenote">
+<strong>三条隐性规则</strong>:① 议程<strong>会前 3 天发</strong>,带背景材料,不看材料的取消发言权;② 每个裁决项必须<strong>有提案</strong>(不能"大家聊聊"),提案人就是 Steward;③ 超时议题自动延后下次,不拖延全场。
+</p>
+
+<div class="exercise">
+  <h3>练习 2.2 · 写出你场景的第一次 Council 议程 <span class="badge">10 min</span></h3>
+  <p>新建 <code>deliverables/council-agenda-v0.1.md</code>。基于上面模板,为<strong>你的场景的第一次 Council</strong> 设计议程。第一次 Council 通常只有 2 个议程项:</p>
+  <ol>
+    <li><strong>通过本章程 v1.0</strong>(从 v0.1 升级而来,Steward 和 Owner 名单已敲定)</li>
+    <li><strong>通过 RACI 矩阵 v0.1</strong>(练习 2.1 的产出)</li>
+  </ol>
+  <p>关键:写明<strong>谁参加、谁主持、谁记录</strong>。第一次 Council 通常是 Sponsor 主持,之后轮换或固定 Owner 主持。</p>
+</div>
+
+<!-- ====================================================== -->
+<h2 id="choose-model">4. 为你的场景选一种模型(5 分钟)</h2>
+
+<p>现在你有了 RACI 矩阵和 Council 模板,但<strong>放在哪种运营模型里跑</strong>需要选定。决策树:</p>
+
+<table>
+  <thead><tr><th>你的场景特征</th><th>推荐模型</th></tr></thead>
+  <tbody>
+    <tr><td>强监管(金融/医疗/政务)+ 预算充足</td><td>中央化</td></tr>
+    <tr><td>多业务线 + 中等规模 + Steward 兼职可行</td><td>联邦化</td></tr>
+    <tr><td>预算紧 + 组织根深蒂固 + "治理"两字敏感</td><td>非侵入</td></tr>
+    <tr><td>不确定 / 初创期治理项目</td><td>非侵入(最低风险启动)</td></tr>
+  </tbody>
+</table>
+
+<div class="exercise">
+  <h3>练习 2.3 · 写下你的模型选择 <span class="badge">5 min</span></h3>
+  <p>在 <code>deliverables/charter-v0.2.md</code>(从 L01 的 v0.1 升级)的"5. 组织"一节下面加一段:</p>
+  <pre><code>### 运营模型选择
+**选定**:非侵入(联邦化 / 中央化)
+**理由**:
+1. [特征 1,如"预算紧张,无法新增独立治理团队"]
+2. [特征 2,如"业务方对'治理'两字敏感,抵触新管控"]
+3. [特征 3,如"已有部分治理动作散落在各业务域,缺正式化"]
+
+**意味着**:
+- Steward 角色:非侵入式(由现有业务骨干兼任,不新增 HC)
+- Council 频次:每月一次(非侵入通常启动期开会更密)
+- 启动期度量重点:正式化的治理动作数(而非质量提升,后者需要时间)</code></pre>
+</div>
+
+<div class="quiz" data-correct="b">
+  <div class="q">Q4 · 一个 Steward 被任命但半年没做任何治理动作,最可能的根因是?</div>
+  <ul>
+    <li data-k="a">Steward 个人能力不够</li>
+    <li data-k="b">未给时间/未在 RACI 明确</li>
+    <li data-k="c">治理工具不可用</li>
+    <li data-k="d">Council 开得不够频繁</li>
+  </ul>
+  <div class="reveal">
+  <strong>答案:B</strong>。这是治理项目第一杀手:<strong>任命了 Steward 但没在绩效/工时分配上兑现</strong>。Seiner 和 Ladley 都强调:Steward 的工作量必须<strong>从原工作里减出来</strong>,不是"额外加"。A 是次因(治理动作大多不需要特殊能力);C/D 是症状而非根因(工具和会议不解决"没时间"问题)。RACI 把 Steward 列上去的同时,需要 Sponsor 在资源分配上认账。
+  </div>
+</div>
+
+<!-- ====================================================== -->
+<hr class="sep">
+
+<h2 id="recap">本课要点回顾</h2>
+
+<ol>
+  <li><strong>运营模型 = 决策权分布</strong>:中央化 / 联邦化 / 非侵入三种,选型看组织现实不是理论偏好。</li>
+  <li><strong>RACI 是把章程落地的工具</strong>:每行<strong>有且仅有一个 A</strong>,这是铁律。</li>
+  <li><strong>Council 是裁决会不是汇报会</strong>:带争议的决策上会,无争议的会前处理。</li>
+  <li><strong>Steward 必须配时间</strong>:任命而不减工作量 = 治理空转。</li>
+</ol>
+
+<h2 id="primary-source">推荐一手阅读</h2>
+
+<p>
+<strong>本课主源</strong>:<a href="https://technicspub.com/nidg/" target="_blank" rel="noopener">Robert S. Seiner, <em>Non-Invasive Data Governance: The Path of Least Resistance and Greatest Success</em></a>。第 3 章 "Defining the Operating Model" 把三种形态讲得比任何博客都细。即使你最终不选非侵入,这本书对"治理本质是问责正式化"的论证会让你重新看自己组织里已经在发生什么。
+</p>
+
+<p>
+<strong>补充</strong>:<a href="https://shop.elsevier.com/books/data-governance/ladley/978-0-12-815831-9" target="_blank" rel="noopener">John Ladley, <em>Data Governance</em> (2nd ed.), Ch. 5–6</a>。Ladley 更偏运营细节,讲 RACI 怎么落地、Council 怎么避免退化。
+</p>
+
+<h2 id="next">下一课预告</h2>
+
+<p>
+<strong>第 03 课 · 成熟度评估:DCAM + DCMM 2.0</strong>。
+章程和运营模型回答了"要做什么",但"现在在哪、离目标多远"需要成熟度评估。我们会用中国国家标准 <strong>DCMM(GB/T 36073-2025,2026-07-01 刚生效)</strong>的 8 个能力域给你组织做一次雷达图自评,产出 6–12 个月改进路线。这一课会强调<strong>新版 DCMM 2.0 与 2018 版的差异</strong>(新增"数据要素运营"维度),避免用过时标准。
+</p>
+
+<div class="ask-teacher">
+<strong>有疑问就问老师(我)</strong>。卡点比如:三种模型你拿不准选哪个(RACI 写不出具体人名说明什么)、Council 第一次没拍板怎么办、Steward 没时间怎么和 Sponsor 谈判。把你的实际场景和困惑贴出来,我们一起拆。
+</div>
+
+</main>
+
+<footer class="lesson">
+  <div>
+    <a href="../../index.html">总览</a> ·
+    <a href="0001-launch-with-dmbok-and-charter.html">← L01 章程</a> ·
+    <a href="#">L03 成熟度 →</a>
+  </div>
+  <div>Lesson 02 · Operating Model</div>
+</footer>
+
+</body>
+</html>
