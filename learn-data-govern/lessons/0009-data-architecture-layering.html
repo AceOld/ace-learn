@@ -1,0 +1,520 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="theme-color" content="#fefefe" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#1a1814" media="(prefers-color-scheme: dark)">
+<meta name="description" content="数据治理第 09 课:数据架构分层(ODS/DWD/DWS/ADS),用 dbt + DuckDB 跑通电商四层最小工程。承接 L04-06 的物理基础。">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<title>第 09 课 · 数据架构分层:ODS / DWD / DWS / ADS</title>
+<link rel="stylesheet" href="../assets/course.css">
+<script src="../assets/quiz.js" defer></script>
+</head>
+<body>
+
+<header class="lesson">
+  <div class="crumb">
+    <a href="../../index.html">总览</a> ·
+    <a href="0008-project-wrapup.html">← L08</a> ·
+    Lesson <strong>09</strong>
+  </div>
+  <h1>数据架构分层 —— ODS / DWD / DWS / ADS</h1>
+  <p class="subtitle">L04-06 假设"表已经存在"。本课回答:这些表是怎么分层组织出来的?为什么这么分?</p>
+  <div class="meta">
+    节奏:约 75 分钟 · 产出物:四层架构图 + 每层治理矩阵 + 可运行 dbt + DuckDB 项目
+  </div>
+</header>
+
+<main>
+
+<div class="callout">
+  <div class="label">承接关系</div>
+  <p style="margin:0;">
+  L04(目录)/ L05(质量)/ L06(血缘)都在<strong>表已存在</strong>的前提下讲治理。但<strong>表怎么分层</strong>是 L01–L08 一直悬而未决的底层问题。本课补上:它对应 DCMM "<strong>数据架构</strong>"能力域,是 L04-06 的物理基础。学完你会突然明白为什么 L06 血缘图天然是"漏斗形"。
+  </p>
+</div>
+
+<div class="deliverable">
+  <div class="label">本课产出物</div>
+  <ol style="margin:0; padding-left:1.3rem;">
+    <li><strong>四层架构图(你的场景版)</strong> —— ODS/DWD/DWS/ADS + 表命名约定</li>
+    <li><strong>每层治理矩阵</strong> —— 把 L04-06 的动作映射到不同层</li>
+    <li><strong>可运行 dbt + DuckDB 项目</strong> —— 电商四层最小工程</li>
+  </ol>
+</div>
+
+<!-- ====================================================== -->
+<h2 id="why-layer">1. 为什么必须分层(8 分钟)</h2>
+
+<h3>不分层的代价</h3>
+
+<p>想象一个公司<strong>所有数据都在一个 schema 里</strong>,业务库的 <code>orders</code> 表直接给 BI 查。会发生什么?</p>
+
+<table>
+  <thead><tr><th>问题</th><th>具体表现</th></tr></thead>
+  <tbody>
+    <tr><td>口径冲突</td><td>BI 团队 A 算"GMV"含退款,B 团队 B 不含,两张报表永远对不上(L01 章程里的经典痛点)</td></tr>
+    <tr><td>重复计算</td><td>10 个看板各自 JOIN 同样的 <code>users × orders</code>,跑 10 次相同逻辑</td></tr>
+    <tr><td>改不动</td><td>业务库 schema 变了,所有下游报表/ETL 一起爆,改一次伤筋动骨</td></tr>
+    <tr><td>权限混乱</td><td>分析师直接查业务库 = 全公司都能看原始数据(L07 合规风险)</td></tr>
+    <tr><td>血缘难解</td><td>没有清晰的"哪一层给谁消费",L06 血缘图变成一团乱麻</td></tr>
+  </tbody>
+</table>
+
+<div class="callout warn">
+  <div class="label">分层的核心价值</div>
+  <p style="margin:0;">
+  分层 = <strong>用空间换秩序</strong>:每一层只解决一类问题,层间通过<strong>清晰契约</strong>(表名约定 + 字段口径 + 物化方式)耦合。源系统变了,只影响 ODS 层;BI 改需求,只在 ADS 层动。<strong>这是 L06 血缘能画出"漏斗形"的根本原因</strong>。
+  </p>
+</div>
+
+<!-- ====================================================== -->
+<h2 id="four-layers">2. 四层架构 ODS / DWD / DWS / ADS(20 分钟)</h2>
+
+<p>国内主流约定(源自阿里 OneData 体系,DataWorks 普及)。四层各有清晰责任:</p>
+
+<table>
+  <thead><tr><th>层</th><th>全称</th><th>责任</th><th>表名约定</th><th>粒度</th></tr></thead>
+  <tbody>
+    <tr><td><strong>ODS</strong></td><td>Operational Data Store</td><td>贴源、1:1 镜像、轻清洗</td><td><code>ods_xxx</code> 或 <code>stg_xxx</code></td><td>同业务库</td></tr>
+    <tr><td><strong>DWD</strong></td><td>Data Warehouse Detail</td><td>明细事实、维度退化、去重、扩字段</td><td><code>dwd_xxx_di</code>(di=detail)</td><td>1 行/业务事件</td></tr>
+    <tr><td><strong>DWS</strong></td><td>Data Warehouse Service</td><td>轻度汇总,服务多场景</td><td><code>dws_xxx_da</code>(da=day)</td><td>1 行/(实体,周期)</td></tr>
+    <tr><td><strong>ADS</strong></td><td>Application Data Service</td><td>面向应用/BI 的最终指标</td><td><code>ads_xxx</code></td><td>1 行/应用对象</td></tr>
+  </tbody>
+</table>
+
+<h3>每层"做什么 / 不做什么"</h3>
+
+<table>
+  <thead><tr><th>层</th><th>✅ 该做</th><th>❌ 不该做</th></tr></thead>
+  <tbody>
+    <tr><td>ODS</td><td>同步源数据、字段重命名、类型转换、简单标准化</td><td>JOIN、聚合、业务逻辑</td></tr>
+    <tr><td>DWD</td><td>去重、退化维度、关联基础维表、补字段</td><td>跨业务域 JOIN、汇总</td></tr>
+    <tr><td>DWS</td><td>按主题轻度汇总(user/day、product/week)</td><td>面向单一应用做特化</td></tr>
+    <tr><td>ADS</td><td>最终指标、宽表、面向 BI/API</td><td>被下游再汇总(它就是终点)</td></tr>
+  </tbody>
+</table>
+
+<p class="sidenote">
+<strong>命名后缀速记</strong>(阿里巴巴约定,国内主流):
+<code>_di</code>(detail)/ <code>_da</code>(day agg)/ <code>_dm</code>(month agg)/ <code>_df</code>(full snapshot)/ <code>_i</code>(incremental)。
+</p>
+
+<div class="callout">
+  <div class="label">漏斗形数据流</div>
+  <p style="margin:0;">
+  ODS 表最多(源系统镜像)→ DWD 收敛(去重 + 业务粒度)→ DWS 进一步收敛(汇总)→ ADS 最少(宽表)。<strong>表数量呈漏斗递减</strong>。这就是 L06 血缘图天然像漏斗的原因 —— 不是巧合,是分层架构的<strong>必然形态</strong>。
+  </p>
+</div>
+
+<div class="quiz" data-correct="c">
+  <div class="q">Q1 · 业务方要在报表里算"GMV",这个"GMV"字段应该在哪一层定义?</div>
+  <ul>
+    <li data-k="a">ODS 层,贴近源头</li>
+    <li data-k="b">DWD 层,明细事实</li>
+    <li data-k="c">ADS 层,面向应用</li>
+    <li data-k="d">直接在业务库加字段</li>
+  </ul>
+  <div class="reveal">
+  <strong>答案:C</strong>。GMV 是<strong>面向应用</strong>的最终指标(ADS 职责)。DWD 只放明细(每笔订单的 amount),不预先聚合;ADS 才把 DWS 的日汇总进一步聚合成"GMV"。放 ODS(A)是越层;放 DWD(B)是混了职责(DWD 不该做应用特化);放业务库(D)是反模式(业务库 schema 不该为分析改)。这就是为什么"一张表的指标"必须<strong>有明确归属层</strong>。
+  </p>
+  </div>
+</div>
+
+<!-- ====================================================== -->
+<h2 id="dimensional">3. 维度建模:DWD/DWS 的灵魂(15 分钟)</h2>
+
+<h3>Kimball 方法</h3>
+
+<p>
+DWD/DWS 用的是 <strong>Kimball 维度建模</strong>。核心是<strong>事实表(fact)+ 维度表(dimension)</strong>的星型结构。比 Inmon 的企业数仓更轻,适合现代数据栈。
+</p>
+
+<table>
+  <thead><tr><th>概念</th><th>定义</th><th>例子</th></tr></thead>
+  <tbody>
+    <tr><td><strong>事实 Fact</strong></td><td>可度量的业务事件</td><td>一笔订单、一次点击、一次转账</td></tr>
+    <tr><td><strong>维度 Dimension</strong></td><td>描述事实的上下文</td><td>用户、商品、时间、地理</td></tr>
+    <tr><td><strong>粒度 Grain</strong></td><td>一行事实代表什么</td><td>"一行 = 一笔已支付订单"</td></tr>
+    <tr><td><strong>度量 Measure</strong></td><td>事实里的数值字段</td><td>amount、quantity、duration</td></tr>
+  </tbody>
+</table>
+
+<h3>缓慢变化维(SCD)</h3>
+
+<p>维度会变化(用户改了手机号、商品改了类目)。怎么记录历史?</p>
+
+<table>
+  <thead><tr><th>类型</th><th>策略</th><th>用在哪</th></tr></thead>
+  <tbody>
+    <tr><td><strong>SCD1</strong></td><td>直接覆盖旧值</td><td>不关心历史(如用户的临时昵称)</td></tr>
+    <tr><td><strong>SCD2</strong></td><td>新增一行 + 起止时间 + 是否当前</td><td>需追溯历史(用户曾经归属哪个销售)</td></tr>
+    <tr><td><strong>SCD3</strong></td><td>加"上一个值"列</td><td>只关心"上一次变化"</td></tr>
+  </tbody>
+</table>
+
+<div class="callout">
+  <div class="label">为什么 SCD2 是 DWD 的核心</div>
+  <p style="margin:0;">
+  没做 SCD2 的 DWD = 报表永远只能看"现在",不能回答"3 个月前这个订单属于哪个类目"。<strong>SCD2 = 给 DWD 装上时间机器</strong>。在 dbt 里用 <code>snapshot</code> 机制实现,这是 L03 数据生存周期知识区的工程对应。
+  </p>
+</div>
+
+<div class="quiz" data-correct="b">
+  <div class="q">Q2 · 用户去年改过一次手机号,业务方要"按历史手机号归属分析订单"。维度表应该用?</div>
+  <ul>
+    <li data-k="a">SCD1,直接覆盖</li>
+    <li data-k="b">SCD2,新增行 + 时间段</li>
+    <li data-k="c">SCD3,加"上一手机号"列</li>
+    <li data-k="d">不存历史,实时查业务库</li>
+  </ul>
+  <div class="reveal">
+  <strong>答案:B</strong>。<strong>需要追溯完整历史 → SCD2</strong>(每个版本一行,带 valid_from/valid_to)。A(SCD1)丢历史;C(SCD3)只存"上一个",改两次以上就丢中间;D 是反模式(每次查业务库性能灾难 + 业务库可能已覆盖)。SCD2 是 DWD 的核心模式之一。
+  </div>
+</div>
+
+<!-- ====================================================== -->
+<h2 id="governance-by-layer">4. 每层治理动作差异(承接 L04-06)(15 分钟)</h2>
+
+<p>
+这是本课最关键的<strong>承接表</strong> —— 把 L04(目录)/L05(质量)/L06(血缘)的动作按层差异化。
+</p>
+
+<table>
+  <thead><tr><th>动作</th><th>ODS</th><th>DWD</th><th>DWS</th><th>ADS</th></tr></thead>
+  <tbody>
+    <tr>
+      <td><strong>DQ 严格度</strong></td>
+      <td>最严:不允许空/重复/格式错</td>
+      <td>严:粒度一致性 + 外键完整</td>
+      <td>中:量纲正确、SLA 时效</td>
+      <td>松:业务侧复核即可</td>
+    </tr>
+    <tr>
+      <td><strong>失败处理(L05)</strong></td>
+      <td>阻断 + 强告警</td>
+      <td>阻断</td>
+      <td>告警 + 降级</td>
+      <td>告警</td>
+    </tr>
+    <tr>
+      <td><strong>血缘(L06)</strong></td>
+      <td>源 → ODS 一对一</td>
+      <td>ODS → DWD 多对少</td>
+      <td>DWD → DWS 收敛</td>
+      <td>DWS → ADS 最收敛</td>
+    </tr>
+    <tr>
+      <td><strong>目录字段(L04)</strong></td>
+      <td>技术元数据为主</td>
+      <td>业务定义必填</td>
+      <td>口径说明 + Owner</td>
+      <td>对外 API 文档</td>
+    </tr>
+    <tr>
+      <td><strong>SLA</strong></td>
+      <td>分钟级(贴源)</td>
+      <td>小时级</td>
+      <td>日级</td>
+      <td>日级/按需</td>
+    </tr>
+    <tr>
+      <td><strong>权限</strong></td>
+      <td>仅 ETL(绝不对业务开放)</td>
+      <td>数据团队</td>
+      <td>分析师</td>
+      <td>业务方 + BI</td>
+    </tr>
+  </tbody>
+</table>
+
+<div class="callout warn">
+  <div class="label">⚠ 最常见的越层事故</div>
+  <p style="margin:0;">
+  <strong>"业务方直接查 ODS"</strong> —— 这是头号违规。ODS 是源数据的镜像,字段语义未规范化、口径未对齐、无 DQ 保证。<strong>业务只应该查 ADS,至多 DWS</strong>。一旦让业务养成查 ODS 的习惯,L04 目录/L07 合规就全废了。<strong>权限是分层能落地的最后防线</strong>。
+  </p>
+</div>
+
+<!-- ====================================================== -->
+<h2 id="dbt-hands-on">5. dbt + DuckDB 实操:电商四层(20 分钟)</h2>
+
+<div class="callout warn">
+  <div class="label">⚠ 技术栈说明(2026-07)</div>
+  <p style="margin:0;">
+  用 <strong>dbt Core 1.11 + dbt-duckdb 1.10</strong>(2026-05 / 2026-02 最新稳定)。DuckDB 是本地嵌入式 OLAP,无需 Docker,无需 server,一个文件就是数据库。与 L04-06 的重型栈(DataHub/GX/Marquez)形成对比 —— <strong>本课零依赖、5 分钟跑通</strong>。
+  </p>
+</div>
+
+<h3>第 1 步:环境(2 分钟)</h3>
+
+<pre><code># 用 venv 隔离(和 L04/L05 的 venv 分开)
+python3 -m venv ~/dbt-venv
+source ~/dbt-venv/bin/activate
+
+# dbt Core 1.11 + duckdb adapter
+pip install dbt-core dbt-duckdb
+
+# 验证(Python 3.10+ 必需)
+dbt --version</code></pre>
+
+<p class="sidenote">
+<strong>坑</strong>:如果用 <code>pipx install dbt-core</code>,加 adapter 要用 <code>pipx inject dbt-core dbt-duckdb</code>,不能 <code>pipx install dbt-duckdb</code>(会装到另一个隔离 env,dbt 找不到)。
+</p>
+
+<h3>第 2 步:初始化项目(3 分钟)</h3>
+
+<pre><code>mkdir dw_lesson && cd dw_lesson
+dbt init dw_lesson
+# 交互式选择:选 duckdb,数据库名 ./dw.duckdb</code></pre>
+
+<p>初始化后的目录结构:</p>
+
+<pre><code>dw_lesson/
+├── dbt_project.yml
+├── models/
+│   └── example/            # 删掉,我们建自己的
+├── seeds/                  # 放 CSV 源数据
+├── tests/
+└── target/</code></pre>
+
+<h3>第 3 步:配置分层(改 dbt_project.yml)</h3>
+
+<pre><code># dbt_project.yml(2026 写法,config-version 不再必填)
+name: dw_lesson
+version: 1.0.0
+profile: dw_lesson
+
+models:
+  dw_lesson:
+    staging: { +materialized: view,  +tags: ods  }   # ODS 层
+    dwd:     { +materialized: table,  +tags: dwd }   # DWD 层
+    dws:     { +materialized: table,  +tags: dws }   # DWS 层
+    ads:     { +materialized: table,  +tags: ads }   # ADS 层</code></pre>
+
+<h3>第 4 步:源数据(seed)</h3>
+
+<p>在 <code>seeds/raw_orders.csv</code> 放电商原始订单数据:</p>
+
+<pre><code>order_id,user_id,order_ts,status,amount
+1001,501,2026-07-01 10:00:00,paid,99.50
+1002,502,2026-07-01 11:30:00,paid,158.00
+1003,501,2026-07-02 09:15:00,cancelled,99.50
+1004,503,2026-07-02 14:00:00,paid,320.00
+1005,502,2026-07-03 16:45:00,paid,75.00</code></pre>
+
+<pre><code>dbt seed                # 把 CSV 灌进 DuckDB</code></pre>
+
+<h3>第 5 步:声明源(ODS 入口)</h3>
+
+<pre><code># models/staging/_sources.yml
+version: 2
+
+sources:
+  - name: raw
+    schema: main
+    description: "源数据(seed 灌入)"
+    tables:
+      - name: raw_orders
+        columns:
+          - name: order_id
+            tests: [not_null, unique]
+          - name: user_id
+            tests: [not_null]</code></pre>
+
+<h3>第 6 步:ODS 层 SQL(轻清洗)</h3>
+
+<pre><code>-- models/staging/stg_orders.sql
+{{ config(materialized='view', tags=['ods']) }}
+
+select
+    cast(order_id   as bigint)    as order_id,
+    cast(user_id    as bigint)    as user_id,
+    cast(order_ts   as timestamp) as order_ts,
+    lower(status)                 as status,            -- 标准化
+    cast(amount     as decimal(12,2)) as amount
+from {{ source('raw', 'raw_orders') }}</code></pre>
+
+<h3>第 7 步:DWD 层 SQL(明细事实)</h3>
+
+<pre><code>-- models/dwd/dwd_orders_di.sql
+{{ config(materialized='table', tags=['dwd']) }}
+
+with stg as (
+    select * from {{ ref('stg_orders') }}
+),
+-- 去重:保留每个 order_id 最新一行
+deduped as (
+    select * from (
+        select *,
+            row_number() over (
+                partition by order_id order by order_ts desc
+            ) as rn
+        from stg
+    ) where rn = 1
+)
+select
+    order_id,
+    user_id,
+    cast(order_ts as date) as order_date,    -- 退化时间维
+    status,
+    amount
+from deduped</code></pre>
+
+<h3>第 8 步:DWS 层 SQL(轻度汇总)</h3>
+
+<pre><code>-- models/dws/dws_user_da.sql
+{{ config(materialized='table', tags=['dws']) }}
+
+select
+    user_id,
+    cast(order_ts as date) as order_date,
+    count(*)               as order_cnt,
+    sum(amount)            as daily_gmv,
+    count(distinct order_id) as distinct_orders
+from {{ ref('dwd_orders_di') }}
+group by 1, 2</code></pre>
+
+<h3>第 9 步:ADS 层 SQL(应用指标)</h3>
+
+<pre><code>-- models/ads/ads_user_metrics.sql
+{{ config(materialized='table', tags=['ads']) }}
+
+select
+    user_id,
+    sum(order_cnt)      as total_orders,
+    sum(daily_gmv)      as lifetime_gmv,
+    min(order_date)     as first_order_date,
+    max(order_date)     as last_order_date
+from {{ ref('dws_user_da') }}
+group by 1</code></pre>
+
+<h3>第 10 步:跑 + 看血缘</h3>
+
+<pre><code>dbt run                              # 按依赖顺序跑所有层
+dbt run --select tag:dwd+            # 只跑 DWD 及下游
+dbt docs generate && dbt docs serve  # 浏览器 http://localhost:8080 看血缘</code></pre>
+
+<p>打开 dbt docs,你会看到<strong>完美的漏斗形血缘图</strong>:1 个 source → 1 个 ODS → 1 个 DWD → 1 个 DWS → 1 个 ADS。<strong>这就是 L06 讲的"血缘 DAG 天然漏斗"的物理来源</strong>。</p>
+
+<div class="exercise">
+  <h3>练习 9.1 · 给你的场景画四层架构图 <span class="badge">15 min</span></h3>
+  <p>新建 <code>deliverables/layering-v0.1.md</code>。基于 L01 的项目场景,列出:</p>
+  <pre><code># 四层架构 v0.1
+
+## 源系统
+- [业务库 1,如 MySQL orders]
+- [业务库 2,如 PG users]
+
+## ODS 层(stg_)
+- stg_orders(来自 MySQL orders)
+- stg_users(来自 PG users)
+
+## DWD 层(dwd_*_di)
+- dwd_orders_di(订单明细事实,粒度=1 行/订单)
+- dwd_users_df(用户维度全量快照,SCD2)
+
+## DWS 层(dws_*_da)
+- dws_user_da(用户/日 汇总)
+- dws_product_da(商品/日 汇总)
+
+## ADS 层(ads_*)
+- ads_user_metrics(用户全生命周期指标,给 BI)
+- ads_retention_cohort(留存队列,给运营)
+
+## 命名约定
+- _di:detail(明细)
+- _da:day aggregate(日汇总)
+- _df:full snapshot(全量快照)
+- _dm:month aggregate(月汇总)
+
+## 越层禁令
+- 业务方只能查 ADS,至多 DWS
+- ODS 绝不对业务开放
+- DWD/DWS 不直接对 BI 开放</code></pre>
+</div>
+
+<!-- ====================================================== -->
+<h2 id="anti-patterns">6. 常见反模式(5 分钟)</h2>
+
+<table>
+  <thead><tr><th>反模式</th><th>为什么错</th><th>正确做法</th></tr></thead>
+  <tbody>
+    <tr><td><strong>ODS 直接给 BI</strong></td><td>无 DQ 保证、口径未对齐、权限混乱</td><td>只让 BI 查 ADS</td></tr>
+    <tr><td><strong>DWS 加业务逻辑</strong></td><td>通用汇总层被单一应用绑架</td><td>业务逻辑下移到 ADS</td></tr>
+    <tr><td><strong>跨层依赖</strong></td><td>ADS 直接 ref ODS,绕过 DWD/DWS</td><td>每层只能 ref 上一层</td></tr>
+    <tr><td><strong>ADS 被 ADS 依赖</strong></td><td>ADS 是终点,不该被汇总</td><td>把公共部分提到 DWS</td></tr>
+    <tr><td><strong>所有层 materialized=table</strong></td><td>ODS 用 view 更灵活、省存储</td><td>ODS view,DWD+ table</td></tr>
+  </tbody>
+</table>
+
+<div class="quiz" data-correct="b">
+  <div class="q">Q3 · 你的分析师说"ODS 太慢,我直接连源 MySQL 查"。最合适的回应?</div>
+  <ul>
+    <li data-k="a">同意,让他用只读账号直连</li>
+    <li data-k="b">拒绝,让他改查 ADS</li>
+    <li data-k="c">让他查 DWD</li>
+    <li data-k="d">把 ODS 物化成 table 加速</li>
+  </ul>
+  <div class="reveal">
+  <strong>答案:B</strong>。<strong>业务方只应该查 ADS</strong>,至多 DWS。直连源 MySQL = 越层 + 权限混乱 + 业务库被分析查询拖垮。ODS 慢的解决之道是<strong>把 ADS 做好</strong>,而不是放行业绕过架构。A 违反 L07 合规(业务库直接暴露);C 越层(DWD 不直接给业务);D 治标不治本(ODS 物化加速仍不解决"业务该不该看 ODS")。
+  </div>
+</div>
+
+<!-- ====================================================== -->
+<hr class="sep">
+
+<h2 id="recap">本课要点回顾</h2>
+
+<ol>
+  <li><strong>分层 = 用空间换秩序</strong>:每层只做一类事,层间靠清晰契约耦合。</li>
+  <li><strong>四层职责</strong>:ODS 贴源 / DWD 明细事实 / DWS 轻度汇总 / ADS 应用指标。</li>
+  <li><strong>Kimball 维度建模</strong>:事实表 + 维度表 + 粒度 + SCD2(历史追溯)。</li>
+  <li><strong>每层治理差异</strong>:DQ 严格度、SLA、权限从 ODS→ADS 递减;血缘天然漏斗形。</li>
+  <li><strong>dbt + DuckDB 是 2026 最轻量落地栈</strong>:零 Docker,5 分钟跑通四层。</li>
+  <li><strong>越层是头号违规</strong>:业务只查 ADS,权限是最后防线。</li>
+</ol>
+
+<h2 id="primary-source">推荐一手阅读</h2>
+
+<p>
+<strong>本课主源 1</strong>:<a href="https://docs.getdbt.com/guides/duckdb" target="_blank" rel="noopener">dbt + DuckDB 官方 Quickstart(2026)</a>。命令和项目结构以官方为准。
+</p>
+
+<p>
+<strong>本课主源 2</strong>:<a href="https://www.aliyun.com/product/ide" target="_blank" rel="noopener">阿里 OneData 体系</a>(中文)。ODS/DWD/DWS/ADS 命名约定和数据分层的原始来源。配套 <a href="https://help.aliyun.com/zh/dataworks/user-guide/data-modeling" target="_blank" rel="noopener">DataWorks 数仓建模文档</a>。
+</p>
+
+<p>
+<strong>维度建模经典</strong>:Kimball《The Data Warehouse Toolkit》。SCD1/2/3、星型 vs 雪花的原始提出。
+</p>
+
+<h2 id="next">本课与原课程的关系</h2>
+
+<p>本课是 L08 终课后的<strong>架构补充</strong>,补全原 L04-06 的物理基础。现在整个数据治理课程的知识闭环如下:</p>
+
+<ul>
+  <li>L01-03:治理的<strong>管理与评估</strong>骨架</li>
+  <li><strong>L09(本课):数据的物理组织</strong> ← 新增</li>
+  <li>L04-06:在分层之上做<strong>目录/质量/血缘</strong>治理</li>
+  <li>L07:合规约束</li>
+  <li>L08:项目收尾</li>
+</ul>
+
+<div class="ask-teacher">
+<strong>有疑问就问老师(我)</strong>。卡点比如:你的场景该分几层(不是所有场景都需要 4 层)、dbt 装不上贴报错、SQL 写不出粒度、SCD2 怎么实现、哪一层放哪个字段。贴你的场景,我帮你画架构图。
+</div>
+
+</main>
+
+<footer class="lesson">
+  <div>
+    <a href="../../index.html">总览</a> ·
+    <a href="0008-project-wrapup.html">← L08</a> ·
+    <span style="color:#888;">L09 补充</span>
+  </div>
+  <div>Lesson 09 · Data Architecture Layering (ODS/DWD/DWS/ADS)</div>
+</footer>
+
+</body>
+</html>
