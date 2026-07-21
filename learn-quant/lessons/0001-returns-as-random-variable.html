@@ -1,0 +1,246 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="theme-color" content="#fefefe" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#1a1814" media="(prefers-color-scheme: dark)">
+<meta name="description" content="量化数学第 01 课:用概率统计的语言重新描述收益——把'涨跌'建模为随机变量,整座量化大厦的第一块砖。">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<title>第 01 课 · 收益是一个随机变量</title>
+
+<!-- KaTeX 数学公式渲染 -->
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
+<script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
+<script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"
+        onload="renderMathInElement(document.body,{delimiters:[{left:'$$',right:'$$',display:true},{left:'$',right:'$',display:false}]});"></script>
+
+<link rel="stylesheet" href="../assets/course.css">
+<script src="../assets/quiz.js" defer></script>
+</head>
+<body>
+
+<header class="lesson">
+  <div class="crumb">
+    <a href="../../index.html">总览</a> ·
+    <a href="../MISSION.md">Mission</a> ·
+    Lesson <strong>01</strong> / <em>量化数学体系</em>
+  </div>
+  <h1>收益,是一个随机变量</h1>
+  <p class="subtitle">用概率与统计的语言,重新描述"涨跌" —— 整座量化大厦的第一块砖。</p>
+  <div class="meta">
+    节奏:约 30 分钟 · 适配:理工科本科数学基础(概率统计,可能生疏需激活)
+  </div>
+</header>
+
+<main>
+
+<p>你可能听过无数人说"这只股票会涨"。但量化交易者不说"会涨",他们说:</p>
+
+<blockquote>
+下一期的收益率 $R$,是一个<strong>随机变量</strong>,它服从某个我们尚不知道、但可以估计的概率分布。
+</blockquote>
+
+<p>这一句话,把"猜测"变成了"建模"。整个量化数学体系,本质都是在回答两个问题:</p>
+<ol>
+  <li>这个分布<strong>长什么样</strong>?(均值在哪、尾巴有多厚)</li>
+  <li>它和其他资产的分布<strong>如何耦合</strong>?(相关性、协方差)</li>
+</ol>
+<p>本课先把第一块砖铺好:<strong>如何定义收益率,以及如何描述它</strong>。</p>
+
+<div class="deliverable">
+  <div class="label">本课产出</div>
+  <ol style="margin:0; padding-left:1.3rem;">
+    <li>理解<strong>简单收益 vs 对数收益</strong>的本质差异和适用场景</li>
+    <li>把"均值/方差"翻译成金融语境的"预期收益/波动率"</li>
+    <li>用 Python 跑出"均值难估、波动率易估"的铁证</li>
+    <li>记住两个年化换算公式:<strong>收益 ×252,波动 ×√252</strong></li>
+  </ol>
+</div>
+
+<!-- ============== Section 1 ============== -->
+<h2 id="two-returns">1. 收益率的两种定义</h2>
+
+<p>设资产在时间 $t$ 的价格为 $P_t$。常用两种收益率:</p>
+
+<p class="math display">
+  <strong>简单收益(simple / arithmetic):</strong>
+  $$R_t = \frac{P_t - P_{t-1}}{P_{t-1}} = \frac{P_t}{P_{t-1}} - 1$$
+</p>
+
+<p class="math display">
+  <strong>对数收益(log / continuously compounded):</strong>
+  $$r_t = \ln\!\left(\frac{P_t}{P_{t-1}}\right) = \ln P_t - \ln P_{t-1}$$
+</p>
+
+<p>这两者几乎相等,但<strong>不等价</strong>。它们的差别决定了你什么时候用哪个:</p>
+
+<table>
+  <thead>
+    <tr><th>性质</th><th>简单收益 $R$</th><th>对数收益 $r$</th></tr>
+  </thead>
+  <tbody>
+    <tr><td>可加性(跨期)</td><td>不可加,需连乘</td><td><strong>可加</strong>:$r(0{\to}T) = \sum_t r_t$</td></tr>
+    <tr><td>可加性(跨资产)</td><td>组合收益是 $R$ 的加权平均</td><td>不是简单平均</td></tr>
+    <tr><td>取值范围</td><td>$R > -1$(不破产)</td><td>$(-\infty, +\infty)$,接近正态</td></tr>
+    <tr><td>建模时</td><td>组合管理、业绩归因</td><td>时间序列建模、统计检验</td></tr>
+  </tbody>
+</table>
+
+<div class="callout">
+  <div class="label">经验法则</div>
+  <p style="margin:0;">
+  <strong>跨资产(算组合)用简单收益,跨时间(建模)用对数收益。</strong>
+  这是量化里最常被忽略、却会默默制造 bug 的细节。
+  </p>
+</div>
+
+<!-- ============== Section 2 ============== -->
+<h2 id="random-variable">2. 把收益当作随机变量来描述</h2>
+
+<p>既然 $r$ 是随机变量,我们用统计量刻画它。对于样本 $r_1, \dots, r_n$:</p>
+
+<p class="math display">
+  样本均值 $\hat{\mu} = \frac{1}{n}\sum_t r_t$ &nbsp;&nbsp;|&nbsp;&nbsp;
+  样本方差 $\hat{\sigma}^2 = \frac{1}{n-1}\sum_t (r_t - \hat{\mu})^2$
+</p>
+
+<p>这两个数字本身平淡无奇,但在金融语境里它们有两个响亮的名字:</p>
+
+<table>
+  <thead><tr><th>统计量</th><th>金融含义</th><th>通常量级(A股日线)</th></tr></thead>
+  <tbody>
+    <tr><td>均值 $\mu$</td><td><strong>预期收益</strong>(drift / 漂移)</td><td>极小,接近 0</td></tr>
+    <tr><td>标准差 $\sigma$</td><td><strong>波动率</strong>(volatility / 风险)</td><td>~1–2%/日</td></tr>
+  </tbody>
+</table>
+
+<div class="callout">
+  <div class="label">关键直觉</div>
+  <p style="margin:0;">
+  <strong>在日频尺度上,均值(信号)比标准差(噪声)小 1–2 个数量级。</strong>
+  $\mu/\sigma \approx 0.05{-}0.1$。这就是为什么短期预测"涨跌"几乎不可能 ——
+  噪声比信号大十倍。量化赚钱,靠的是把这个微弱信号在<strong>大量独立下注</strong>上累积(Law of Large Numbers)。
+  </p>
+</div>
+
+<!-- ============== Section 3: Python ============== -->
+<h2 id="python">3. 用 Python 看一眼真实分布</h2>
+
+<p>理论说够多了,动手跑。下面用真实风格的数据把上面的概念跑出来(此处用模拟对数收益;后续课程会换成真实行情):</p>
+
+<pre><code>import numpy as np
+
+rng = np.random.default_rng(42)
+mu, sigma = 0.0005, 0.015          # 日均 0.05%, 日波动率 1.5%
+n = 252 * 5                         # 5 年的交易日
+r = rng.normal(mu, sigma, n)        # 对数收益 ~ N(mu, sigma^2)
+
+price = 100 * np.exp(np.cumsum(r))  # 价格 = 100 * exp(累积对数收益)
+
+print("真值年化均值  :", round(mu * 252, 4))                      # 0.126
+print("样本年化均值  :", round(r.mean() * 252, 4))                # 0.027
+print("样本年化波动率:", round(r.std(ddof=1) * np.sqrt(252), 4))  # 0.235</code></pre>
+
+<div class="callout produce">
+  <div class="label">输出</div>
+  <pre style="margin:0; background:none; padding:0; border:none;"><code>真值年化均值  : 0.126
+样本年化均值  : 0.027
+样本年化波动率: 0.235</code></pre>
+</div>
+
+<div class="callout warn">
+  <div class="label">注意!真值 0.126,样本只估出 0.027</div>
+  <p style="margin:0;">
+  真实漂移率年化 12.6%,但拿 5 年真实数据反推,样本均值只给出 2.7% —— <strong>差了快 5 倍</strong>。
+  波动率却估得很准(真值 $1.5\% \times \sqrt{252} = 23.8\%$,样本 $23.5\%$)。
+  这不是 bug,正是本课核心结论的铁证:<strong>均值(信号)极难估准,标准差(噪声)很容易估准。</strong>
+  这也是为什么"预测涨跌"如此困难,而量化策略更依赖波动率结构而非方向预测。
+  </p>
+</div>
+
+<div class="callout">
+  <div class="label">两个换算公式,记住</div>
+  <p style="margin:0;">
+  <strong>年化波动率</strong> = 日波动率 $\times \sqrt{252}$ &nbsp;&nbsp;(平方根法则,来自独立同分布的方差可加性)
+  </p>
+  <p style="margin-bottom:0; margin-top:0.4rem;">
+  <strong>年化(对数)收益</strong> = 日均 $\times 252$
+  </p>
+</div>
+
+<!-- ============== Quiz ============== -->
+<h2 id="check">4. 检查理解</h2>
+
+<div class="quiz" data-correct="c">
+  <div class="q">某策略过去 3 个月日均对数收益 0.02%,日波动率 1.2%。它的年化夏普比率(无风险利率 0)约为?</div>
+  <ul>
+    <li data-k="a">0.02 / 1.2 ≈ 0.017</li>
+    <li data-k="b">(0.02% × 252) / (1.2% × 252) ≈ 0.017</li>
+    <li data-k="c">(0.02% × 252) / (1.2% × √252) ≈ 0.265</li>
+    <li data-k="d">(0.02% × √252) / (1.2% × √252) ≈ 0.017</li>
+  </ul>
+  <div class="reveal">
+  <strong>答案:C</strong>。年化收益 $0.02\% \times 252 = 5.04\%$;年化波动 $1.2\% \times \sqrt{252} \approx 19.05\%$;夏普 $= 5.04/19.05 \approx 0.265$。<strong>分子 ×252,分母 ×√252,所以净效果是 ×√252</strong>。A/B/D 都错在年化方式上:波动用 √252(因为方差可加),均值用 252(因为期望线性)。
+  </div>
+</div>
+
+<div class="quiz" data-correct="b">
+  <div class="q">你要计算一个由 60% 股票 + 40% 债券组成的组合的"当日收益",应该用?</div>
+  <ul>
+    <li data-k="a">对数收益的加权平均</li>
+    <li data-k="b">简单收益的加权平均</li>
+    <li data-k="c">先取对数再加权,最后 exp 回来</li>
+  </ul>
+  <div class="reveal">
+  <strong>答案:B</strong>。<strong>跨资产(算组合)应该用简单收益</strong>,因为组合收益 $R_p = \sum_i w_i R_i$,这个线性可加性是 Markowitz 组合理论的基石。对数收益不满足这个线性叠加性(对数的和不是和的对数)。A 错;C 失去直观解读且数学上没意义。
+  </div>
+</div>
+
+<!-- ============== Takeaway ============== -->
+<h2 id="takeaway">本课要点</h2>
+
+<ul>
+  <li><strong>收益是随机变量</strong>。量化建模 = 估计并利用它的分布。</li>
+  <li><strong>跨资产用简单收益</strong>(组合可加权平均),<strong>跨时间用对数收益</strong>(可累加)。</li>
+  <li>均值 = 预期收益(信号),标准差 = 波动率(噪声);<strong>日频信号比噪声小 1–2 个数量级</strong>。</li>
+  <li>年化:收益 ×252,波动 ×√252。<strong>夏普净年化系数是 √252</strong>。</li>
+</ul>
+
+<div class="exercise">
+  <h3>动手练习(建议做)<span class="badge">15 min</span></h3>
+  <p>用 pandas 读一段真实行情(比如 <code>yfinance</code> 拉 <code>AAPL</code> 近 5 年收盘价),分别计算简单收益和对数收益,验证它们数值接近但不等;再算出年化均值与年化波动率。把结果记到 <code>learning-records/0002-returns-empirical.md</code> —— 这是你的第二条学习记录。</p>
+</div>
+
+<h2 id="primary-source">推荐主源</h2>
+
+<p>
+<strong>本课主源</strong>:<a href="https://onlinelibrary.wiley.com/doi/book/10.1002/9780470644560" target="_blank" rel="noopener"><em>Analysis of Financial Time Series</em>(Tsay, 3rd ed.)第 1 章</a> —— 它正是从"资产收益及其统计量"开篇的,与本课完全同构。
+</p>
+
+<h2 id="next">下一课预告</h2>
+
+<p>
+<strong>第 02 课 · 波动率与正态性幻觉</strong>。
+本课我们说"对数收益接近正态",但<strong>真的正态吗</strong>?下一课拆穿这个幻觉:肥尾(fat tails)、偏度(skewness)、波动率聚类(volatility clustering),以及为什么 2008 和 2020 的崩盘在正态假设下"几十亿年才发生一次"。
+</p>
+
+<div class="ask-teacher">
+<strong>有问题就问老师(我)</strong>。任何地方不清楚 —— 比如"为什么波动率年化是 ×√252 而不是 ×252"、"对数收益为什么取值范围是整个实数轴"、"为什么样本均值估不准但样本方差估得准" —— 直接问。<strong>提问就是最好的学习。</strong>
+</div>
+
+</main>
+
+<footer class="lesson">
+  <div>
+    <a href="../../index.html">总览</a> ·
+    <a href="../MISSION.md">Mission</a> ·
+    <a href="../RESOURCES.md">Resources</a>
+  </div>
+  <div>
+    Lesson 01 · <a href="0002-volatility-and-normality.html">第 02 课:波动率与正态性幻觉 →</a>
+  </div>
+</footer>
+
+</body>
+</html>

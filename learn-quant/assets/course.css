@@ -1,0 +1,537 @@
+/* ===========================================================
+ * learn-data-govern · 课程共享样式表
+ * 所有 lesson HTML 通过 <link rel="stylesheet" href="../assets/course.css"> 引用。
+ * 设计原则:Tufte 风,留白、衬线正文、窄栏、可打印。
+ * =========================================================== */
+
+:root {
+  --fg: #1a1a1a;
+  --fg-soft: #444;
+  --fg-mute: #666;
+  --fg-faint: #999;
+  --bg: #fefefe;
+  --bg-soft: #f6f4ef;
+  --bg-callout: #eef4f8;
+  --rule: #d8d4cc;
+  --rule-strong: #1a1a1a;
+  --accent: #8a1538;        /* 深酒红,正文里强调 */
+  --accent-soft: #f4e9ec;
+  --link: #5a4a8a;
+  --ok: #1f6b3a;
+  --warn: #a06000;
+  --code-bg: #f3f0ea;
+  --serif: "Iowan Old Style", "Palatino Linotype", "Songti SC", "Source Han Serif SC", "Noto Serif CJK SC", "Noto Serif", Georgia, serif;
+  --sans: -apple-system, BlinkMacSystemFont, "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "Source Han Sans SC", "Helvetica Neue", Arial, sans-serif;
+  --mono: "JetBrains Mono", "SF Mono", "Menlo", "Consolas", "Source Han Mono SC", monospace;
+}
+
+* { box-sizing: border-box; }
+
+html { -webkit-text-size-adjust: 100%; }
+
+body {
+  margin: 0;
+  padding: 0 1.2rem 6rem;
+  background: var(--bg);
+  color: var(--fg);
+  font-family: var(--serif);
+  font-size: 18px;
+  line-height: 1.65;
+  font-feature-settings: "kern", "liga", "calt";
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+/* 容器:窄栏 */
+main, header.lesson, footer.lesson {
+  max-width: 720px;
+  margin: 0 auto;
+}
+
+/* ---------- 页眉 ---------- */
+header.lesson {
+  padding: 3rem 0 1.5rem;
+  border-bottom: 1px solid var(--rule);
+  margin-bottom: 2rem;
+}
+header.lesson .crumb {
+  font-family: var(--sans);
+  font-size: 0.78rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--fg-faint);
+  margin-bottom: 0.6rem;
+}
+header.lesson .crumb a {
+  color: var(--fg-mute);
+  text-decoration: none;
+  border-bottom: 1px dotted var(--fg-faint);
+}
+header.lesson h1 {
+  font-size: 2.0rem;
+  line-height: 1.2;
+  margin: 0 0 0.6rem;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+header.lesson .subtitle {
+  font-style: italic;
+  color: var(--fg-mute);
+  font-size: 1.05rem;
+  margin: 0;
+}
+header.lesson .meta {
+  font-family: var(--sans);
+  font-size: 0.82rem;
+  color: var(--fg-faint);
+  margin-top: 0.8rem;
+}
+
+/* ---------- 正文排版 ---------- */
+h2 {
+  font-family: var(--sans);
+  font-size: 1.25rem;
+  font-weight: 600;
+  margin: 2.6rem 0 0.8rem;
+  letter-spacing: 0.01em;
+  color: var(--fg);
+}
+h2::before {
+  content: "";
+  display: block;
+  width: 2rem;
+  height: 2px;
+  background: var(--accent);
+  margin-bottom: 0.6rem;
+}
+h3 {
+  font-family: var(--sans);
+  font-size: 1.02rem;
+  font-weight: 600;
+  margin: 1.8rem 0 0.4rem;
+  color: var(--fg);
+}
+p { margin: 0 0 1.1rem; }
+ul, ol { margin: 0 0 1.1rem; padding-left: 1.4rem; }
+li { margin-bottom: 0.35rem; }
+li::marker { color: var(--fg-faint); }
+
+strong { font-weight: 600; color: var(--fg); }
+em { font-style: italic; }
+
+a {
+  color: var(--link);
+  text-decoration: none;
+  border-bottom: 1px solid transparent;
+  transition: border-color 0.15s ease;
+}
+a:hover { border-bottom-color: var(--link); }
+
+/* ---------- 边注(Tufte 风格)---------- */
+.sidenote {
+  font-family: var(--sans);
+  font-size: 0.82rem;
+  line-height: 1.45;
+  color: var(--fg-mute);
+  background: var(--bg-soft);
+  border-left: 2px solid var(--rule);
+  padding: 0.6rem 0.9rem;
+  margin: 1rem 0;
+  border-radius: 0;
+}
+.sidenote strong { color: var(--fg); }
+
+/* ---------- 引用块 ---------- */
+blockquote {
+  margin: 1.4rem 0;
+  padding: 0.2rem 0 0.2rem 1.2rem;
+  border-left: 3px solid var(--accent);
+  color: var(--fg-soft);
+  font-style: italic;
+}
+blockquote cite {
+  display: block;
+  font-style: normal;
+  font-size: 0.85rem;
+  color: var(--fg-mute);
+  margin-top: 0.5rem;
+}
+
+/* ---------- 行内代码 ---------- */
+code {
+  font-family: var(--mono);
+  font-size: 0.86em;
+  background: var(--code-bg);
+  padding: 0.1em 0.35em;
+  border-radius: 2px;
+  color: var(--fg);
+}
+
+/* ---------- 代码块 ---------- */
+pre {
+  background: var(--code-bg);
+  padding: 1rem 1.1rem;
+  border-radius: 4px;
+  overflow-x: auto;
+  font-size: 0.86rem;
+  line-height: 1.5;
+  margin: 1rem 0 1.4rem;
+  border: 1px solid var(--rule);
+}
+pre code {
+  background: none;
+  padding: 0;
+  border-radius: 0;
+  font-size: inherit;
+}
+
+/* ---------- 表格 ---------- */
+table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 1.2rem 0 1.6rem;
+  font-size: 0.92rem;
+  font-family: var(--sans);
+}
+th, td {
+  text-align: left;
+  padding: 0.55rem 0.7rem;
+  border-bottom: 1px solid var(--rule);
+  vertical-align: top;
+}
+th {
+  font-weight: 600;
+  background: var(--bg-soft);
+  border-bottom: 2px solid var(--rule-strong);
+  font-size: 0.82rem;
+  letter-spacing: 0.03em;
+  color: var(--fg-soft);
+}
+
+/* ---------- Callout 盒 ---------- */
+.callout {
+  background: var(--bg-callout);
+  border: 1px solid #cdd9e0;
+  border-left: 4px solid #4a7a96;
+  padding: 1rem 1.2rem;
+  margin: 1.4rem 0;
+  border-radius: 3px;
+}
+.callout .label {
+  font-family: var(--sans);
+  font-size: 0.74rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #4a7a96;
+  font-weight: 600;
+  margin-bottom: 0.4rem;
+}
+.callout.warn {
+  background: #fbf4e8;
+  border-color: #e2c98f;
+  border-left-color: var(--warn);
+}
+.callout.warn .label { color: var(--warn); }
+.callout.produce {
+  background: #eef6ef;
+  border-color: #aacbb5;
+  border-left-color: var(--ok);
+}
+.callout.produce .label { color: var(--ok); }
+
+/* ---------- 产出物清单 ---------- */
+.deliverable {
+  background: var(--accent-soft);
+  border-left: 4px solid var(--accent);
+  padding: 1rem 1.2rem;
+  margin: 1.4rem 0;
+  font-family: var(--sans);
+  font-size: 0.95rem;
+}
+.deliverable .label {
+  font-size: 0.74rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--accent);
+  font-weight: 600;
+  margin-bottom: 0.4rem;
+}
+
+/* ---------- 练习(反馈闭环)---------- */
+.exercise {
+  border: 1px dashed var(--rule-strong);
+  padding: 1.2rem 1.4rem;
+  margin: 1.8rem 0;
+  background: #fbfaf6;
+}
+.exercise h3 {
+  margin-top: 0;
+  font-family: var(--sans);
+  display: flex;
+  align-items: baseline;
+  gap: 0.5rem;
+}
+.exercise h3::before {
+  content: "▶";
+  color: var(--accent);
+  font-size: 0.85em;
+}
+.exercise h3::before { display: none; }
+.exercise .badge {
+  font-family: var(--sans);
+  font-size: 0.7rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  background: var(--fg);
+  color: var(--bg);
+  padding: 0.15rem 0.5rem;
+  border-radius: 2px;
+  vertical-align: middle;
+  margin-left: 0.5rem;
+  font-weight: 600;
+}
+
+/* ---------- 测验(同长度选项)---------- */
+.quiz {
+  border: 1px solid var(--rule);
+  padding: 1.2rem 1.4rem 0.4rem;
+  margin: 1.8rem 0;
+  background: #fcfbf7;
+}
+.quiz .q {
+  font-weight: 600;
+  font-family: var(--sans);
+  font-size: 0.98rem;
+  margin-bottom: 0.8rem;
+}
+.quiz ul {
+  list-style: none;
+  padding-left: 0;
+}
+.quiz li {
+  font-family: var(--sans);
+  font-size: 0.92rem;
+  padding: 0.4rem 0;
+  cursor: pointer;
+  border-bottom: 1px dotted var(--rule);
+  position: relative;
+  padding-left: 1.8rem;
+}
+.quiz li::before {
+  content: "○";
+  position: absolute;
+  left: 0.3rem;
+  color: var(--fg-faint);
+}
+.quiz li.correct { color: var(--ok); font-weight: 600; }
+.quiz li.correct::before { content: "●"; color: var(--ok); }
+.quiz li.wrong { color: #a02828; }
+.quiz li.wrong::before { content: "●"; color: #a02828; }
+.quiz .reveal {
+  display: none;
+  font-family: var(--sans);
+  font-size: 0.88rem;
+  color: var(--fg-mute);
+  padding: 0.8rem 0 0.4rem;
+  border-top: 1px solid var(--rule);
+  margin-top: 0.6rem;
+}
+.quiz .reveal.shown { display: block; }
+
+/* ---------- 提示框 ---------- */
+.ask-teacher {
+  font-family: var(--sans);
+  font-size: 0.92rem;
+  background: var(--bg-soft);
+  border-top: 2px solid var(--rule-strong);
+  padding: 1rem 1.2rem;
+  margin-top: 2.5rem;
+  color: var(--fg-soft);
+}
+.ask-teacher strong { color: var(--fg); }
+
+/* ---------- 页脚 ---------- */
+footer.lesson {
+  margin-top: 3rem;
+  padding-top: 1.2rem;
+  border-top: 1px solid var(--rule);
+  font-family: var(--sans);
+  font-size: 0.82rem;
+  color: var(--fg-mute);
+  display: flex;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 1rem;
+}
+footer.lesson a { color: var(--fg-mute); }
+footer.lesson a:hover { color: var(--fg); border-bottom-color: var(--fg); }
+
+hr.sep {
+  border: none;
+  border-top: 1px solid var(--rule);
+  margin: 2.5rem 0;
+}
+
+/* ---------- 打印 ---------- */
+@media print {
+  body { font-size: 11pt; padding: 0; }
+  header.lesson { padding-top: 0; }
+  .callout, .deliverable, .exercise, .quiz { break-inside: avoid; }
+  a { border-bottom: none; color: var(--fg); }
+}
+
+/* ---------- 移动端 ---------- */
+@media (max-width: 640px) {
+  body {
+    font-size: 16px;
+    line-height: 1.7;
+    padding: 0 1rem 4rem;
+    /* iOS Safari 100vh 问题 + 安全区 */
+    padding-bottom: calc(4rem + env(safe-area-inset-bottom));
+  }
+  main, header.lesson, footer.lesson {
+    max-width: 100%;
+    padding-left: 0;
+    padding-right: 0;
+  }
+
+  /* 标题在手机上需要更紧凑 */
+  header.lesson {
+    padding: 1.5rem 0 1rem;
+    margin-bottom: 1.5rem;
+  }
+  header.lesson h1 {
+    font-size: 1.55rem;
+    line-height: 1.25;
+  }
+  header.lesson .subtitle { font-size: 0.95rem; }
+  header.lesson .crumb {
+    font-size: 0.7rem;
+    /* 面包屑在窄屏易换行,让它断行更自然 */
+    line-height: 1.4;
+    word-break: break-word;
+  }
+
+  h2 { font-size: 1.15rem; margin: 2rem 0 0.7rem; }
+  h3 { font-size: 0.98rem; }
+
+  /* 段落间距更松,小屏阅读更顺 */
+  p { margin-bottom: 1rem; }
+  ul, ol { padding-left: 1.2rem; }
+
+  /* 链接点击区加大:防止误触 */
+  a {
+    padding: 0.1em 0.05em;
+    border-bottom-width: 2px;
+  }
+
+  /* 代码块在小屏易溢出,加横向滚动 */
+  pre {
+    font-size: 0.78rem;
+    padding: 0.8rem;
+    /* iOS momentum scroll */
+    -webkit-overflow-scrolling: touch;
+  }
+  code { font-size: 0.84em; }
+
+  /* 表格在小屏必然溢出,让它横向可滚 */
+  table {
+    display: block;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    font-size: 0.85rem;
+    -ms-overflow-style: -ms-autohiding-scrollbar;
+  }
+  th, td { padding: 0.4rem 0.55rem; white-space: nowrap; }
+
+  /* Callout 在小屏不要太重 padding,挤屏 */
+  .callout,
+  .deliverable,
+  .exercise,
+  .quiz {
+    padding: 0.9rem 1rem;
+    margin: 1.2rem 0;
+  }
+
+  /* Quiz 选项是手机上主要点击目标,必须大 */
+  .quiz li {
+    padding: 0.8rem 0 0.8rem 2rem;   /* 拉高每行高度 */
+    font-size: 0.95rem;
+    line-height: 1.4;
+  }
+  .quiz li::before {
+    left: 0.5rem;
+    font-size: 1.1em;                /* 单选圈更大,易看清 */
+    top: 0.8rem;
+  }
+
+  /* 引用块、边注在小屏别占太多视觉重量 */
+  blockquote { margin: 1rem 0; padding-left: 0.9rem; }
+  .sidenote { font-size: 0.78rem; padding: 0.5rem 0.8rem; }
+
+  /* 页脚在小屏堆叠,避免横向挤压 */
+  footer.lesson {
+    flex-direction: column;
+    gap: 0.4rem;
+    font-size: 0.78rem;
+  }
+
+  /* 页脚链接点击区也加大 */
+  footer.lesson a {
+    display: inline-block;
+    padding: 0.3rem 0;
+  }
+}
+
+/* ---------- 超小屏(≤ 380px,iPhone SE / 折叠屏外屏)---------- */
+@media (max-width: 380px) {
+  body { font-size: 15px; }
+  header.lesson h1 { font-size: 1.35rem; }
+  pre { font-size: 0.72rem; padding: 0.7rem; }
+}
+
+/* ---------- 横屏手机(短高度)---------- */
+@media (max-width: 900px) and (max-height: 500px) and (orientation: landscape) {
+  body { font-size: 15px; padding-top: 0.5rem; padding-bottom: 2rem; }
+  header.lesson { padding: 1rem 0 0.7rem; margin-bottom: 1rem; }
+}
+
+/* ---------- 深色模式跟随系统(夜间阅读省眼)---------- */
+@media (prefers-color-scheme: dark) {
+  :root {
+    --fg: #e8e6e0;
+    --fg-soft: #c5c2b8;
+    --fg-mute: #9a978d;
+    --fg-faint: #6f6c63;
+    --bg: #1a1814;
+    --bg-soft: #25221c;
+    --bg-callout: #1e2a32;
+    --rule: #3a352c;
+    --rule-strong: #e8e6e0;
+    --accent: #d4869a;
+    --accent-soft: #3a2530;
+    --link: #a896d8;
+    --ok: #6fbf8a;
+    --warn: #d4a35a;
+    --code-bg: #25221c;
+  }
+  body { background: var(--bg); color: var(--fg); }
+  .callout { background: var(--bg-callout); }
+  .callout.warn { background: #3a2e1f; }
+  .callout.produce { background: #1f3329; }
+  .exercise { background: #1f1d18; }
+  .quiz { background: #1f1d18; }
+  .sidenote { background: var(--bg-soft); }
+  table th { background: var(--bg-soft); }
+}
+
+/* ---------- 大字体无障碍(跟随系统设置)---------- */
+@media (min-resolution: 1.5dppx) and (min-width: 641px) {
+  /* 高 DPI 桌面/平板,字号微调让字更清晰 */
+  body { font-size: 19px; }
+}
+
+/* 减少动画:尊重 prefers-reduced-motion */
+@media (prefers-reduced-motion: reduce) {
+  a { transition: none; }
+}
