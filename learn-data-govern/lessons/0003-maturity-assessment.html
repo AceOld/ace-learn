@@ -1,0 +1,331 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="theme-color" content="#fefefe" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#1a1814" media="(prefers-color-scheme: dark)">
+<meta name="description" content="数据治理第 03 课:DCAM + DCMM 2.0(GB/T 36073-2025)成熟度评估,9 个能力域雷达图自评,6-12 月改进路线。">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<title>第 03 课 · 成熟度评估:DCAM + DCMM 2.0</title>
+<link rel="stylesheet" href="../assets/course.css">
+<script src="../assets/quiz.js" defer></script>
+</head>
+<body>
+
+<header class="lesson">
+  <div class="crumb">
+    <a href="../../index.html">总览</a> ·
+    <a href="0002-operating-model.html">← L02</a> ·
+    Lesson <strong>03</strong>
+  </div>
+  <h1>成熟度评估 —— DCAM + DCMM 2.0</h1>
+  <p class="subtitle">章程说了"要去哪里",本课解决"现在在哪里、差多远"——用中国国家标准 DCMM 给你组织画一张雷达图。</p>
+  <div class="meta">
+    节奏:约 70 分钟 · 产出物:9 域雷达图 + 6–12 月改进路线
+  </div>
+</header>
+
+<main>
+
+<p>
+你已经把章程写好(L01)、把运营模型定好(L02)。但 Sponsor 会问你一个绕不开的问题:<strong>"我们现在到底什么水平?做到 L3 要多久?"</strong>。如果答不出来,你的治理项目就拿不到预算。
+</p>
+
+<p>
+成熟度模型(Maturity Model)就是回答这个问题的工具。<strong>它不是评分卡,是路线图</strong>。本课用中国国家标准 <strong>DCMM(GB/T 36073-2025,DCMM 2.0)</strong>给你的组织做一次自评,产出一张雷达图和一份 6–12 月改进路线。
+</p>
+
+<div class="callout warn">
+  <div class="label">⚠ 时效关键(2026-07)</div>
+  <p style="margin:0;">
+  <strong>DCMM 2.0(GB/T 36073-2025)于 2026-07-01 生效,2018 版作废</strong>。新版是 <strong>9 个能力域(不是 8 个)</strong>:新增了"数据资产"域,"数据应用"改名"数据应用流通"。如果你看到的资料还是 8 域,那是过时的 2018 版。<a href="https://std.samr.gov.cn/gb/search/gbDetailed?id=473EBB99D6AB455EE06397BE0A0ABB9A" target="_blank" rel="noopener">标准记录见 SAMR</a>。
+  </p>
+</div>
+
+<div class="deliverable">
+  <div class="label">本课产出物</div>
+  <ol style="margin:0; padding-left:1.3rem;">
+    <li><strong>DCMM 9 域自评雷达图</strong> —— 你组织的当前水平快照</li>
+    <li><strong>差距分析表</strong> —— 每个域差几级、卡在哪</li>
+    <li><strong>6–12 月改进路线</strong> —— 按投入产出比排序的 5 个动作</li>
+  </ol>
+</div>
+
+<!-- ====================================================== -->
+<h2 id="dcmm-9-domains">1. DCMM 2.0 的 9 个能力域(15 分钟)</h2>
+
+<h3>9 个域速记</h3>
+
+<table>
+  <thead><tr><th>#</th><th>域(中文)</th><th>关注什么</th><th>DMBOK 对应</th></tr></thead>
+  <tbody>
+    <tr><td>1</td><td><strong>数据战略</strong></td><td>数据如何服务业务战略</td><td>(DMBOK 无独立域,归在 Governance)</td></tr>
+    <tr><td>2</td><td><strong>数据治理</strong></td><td>组织、制度、流程、问责</td><td>Data Governance(hub)</td></tr>
+    <tr><td>3</td><td><strong>数据架构</strong></td><td>模型、分布、流向</td><td>Data Architecture + Modeling</td></tr>
+    <tr><td>4</td><td><strong>数据应用流通</strong><br><small>2.0 改名</small></td><td>内部应用 + 跨组织流通(新)</td><td>Data Warehousing & BI + 部分 Integration</td></tr>
+    <tr><td>5</td><td><strong>数据安全</strong></td><td>分类分级、访问控制、合规</td><td>Data Security</td></tr>
+    <tr><td>6</td><td><strong>数据质量</strong></td><td>质量规则、监控、改进</td><td>Data Quality</td></tr>
+    <tr><td>7</td><td><strong>数据标准</strong></td><td>业务术语、技术规范</td><td>Metadata + Reference Data</td></tr>
+    <tr><td>8</td><td><strong>数据生存周期</strong></td><td>采集、存储、归档、销毁</td><td>Storage & Ops + Document Mgmt</td></tr>
+    <tr><td>9</td><td><strong>数据资产</strong><br><small>2.0 新增</small></td><td>权属、价值评估、资产运营</td><td><strong>DMBOK 无对应(中国特有)</strong></td></tr>
+  </tbody>
+</table>
+
+<div class="callout">
+  <div class="label">"数据资产"域为什么是 2.0 最大的事</div>
+  <p style="margin:0;">
+  这个域直接对接中国的"数据要素市场化"政策(数据被定义为生产要素),包含三个能力项:<strong>权属管理(确权)/ 价值评估(资产入表)/ 资产运营(流通变现)</strong>。DAMA-DMBOK 是西方数据管理实践的总结,完全没有这一块。如果你在中国组织做治理,这一域是<strong>政策驱动</strong>的硬要求。
+  </p>
+</div>
+
+<p class="sidenote">
+<strong>"数据要素运营"不是域名</strong>:它是 2.0 的<strong>叙事定位</strong>(slogan:从"管数据"到"运营数据要素")。真正的域名是"数据资产"。早期解读文章常把它误称为新域名 —— 现在你分得清。
+</p>
+
+<h3>5 级成熟度</h3>
+
+<table>
+  <thead><tr><th>级</th><th>名称</th><th>核心特征</th><th>2.0 新要求</th></tr></thead>
+  <tbody>
+    <tr><td>1</td><td>初始级</td><td>临时、个人化、无制度</td><td><strong>实际不评估</strong>(等同于无管理)</td></tr>
+    <tr><td>2</td><td>受管理级</td><td>有制度、有角色、重复执行</td><td>—</td></tr>
+    <tr><td>3</td><td>稳健级</td><td>组织级标准、跨部门协同</td><td>—</td></tr>
+    <tr><td>4</td><td>量化管理级</td><td>度量驱动、可预测结果</td><td><strong>新增 AI 辅助 + 高质量数据集要求</strong></td></tr>
+    <tr><td>5</td><td>优化级</td><td>持续改进、业务创新反哺</td><td><strong>同上,AI/数据集要求更强</strong></td></tr>
+  </tbody>
+</table>
+
+<div class="quiz" data-correct="b">
+  <div class="q">Q1 · DCMM 2.0(GB/T 36073-2025)相比 2018 版,能力域数量变化是?</div>
+  <ul>
+    <li data-k="a">从 11 个减少到 9 个</li>
+    <li data-k="b">从 8 个增加到 9 个</li>
+    <li data-k="c">数量不变,只改名</li>
+    <li data-k="d">从 9 个增加到 11 个</li>
+  </ul>
+  <div class="reveal">
+  <strong>答案:B</strong>。2018 版 8 域,2025 版 2.0 新增"数据资产"域,共 9 域;同时"数据应用"改名"数据应用流通"。能力项 28→33,评估条目 445→~576。A/D 是数字搞反;C 忽略了"数据资产"这个全新增的域(中国特有,对应数据要素市场化政策)。
+  </div>
+</div>
+
+<!-- ====================================================== -->
+<h2 id="self-assess">2. 自评雷达图(25 分钟)</h2>
+
+<h3>自评纪律</h3>
+
+<p>
+自评最大的诱惑是<strong>乐观打分</strong>。给自己打的分,默认会被第三方评估师砍 1 级。为避免这种情况,自评时遵守<strong>三条铁律</strong>:
+</p>
+
+<ol>
+  <li><strong>有证据</strong>:每一项打分必须能拿出文档/系统/记录作证。"我们大概是 L3"不算分。</li>
+  <li><strong>取最低项</strong>:一个域里有多个能力项,取<strong>最低</strong>那个定级,不是平均(L3 不是平均 L3,是每一项都 L3)。</li>
+  <li><strong>跨部门校准</strong>:不要只问治理团队,业务/IT/安全都要访谈,治理团队对自己往往高估。</li>
+</ol>
+
+<h3>9 域自评表模板</h3>
+
+<div class="exercise">
+  <h3>练习 3.1 · DCMM 9 域自评 <span class="badge">20 min</span></h3>
+  <p>新建 <code>deliverables/dcmm-self-assessment-v0.1.md</code>,把下表填完。<strong>诚实</strong>比高分重要 —— 这张表是给 Sponsor 看现状和要预算的,不是给领导看政绩的。</p>
+  <pre><code># DCMM 2.0 九域自评 v0.1
+
+> 组织:[你的项目场景]
+> 评估人:[你 + 跨部门参与者]
+> 日期:2026-07-XX
+
+| # | 能力域         | 当前级 | 目标级 | 差距 | 关键证据/缺口             |
+|---|---------------|:-----:|:-----:|:---:|-------------------------|
+| 1 | 数据战略       |  1-5  |  3-4  |  -  | [文档/系统/缺口描述]      |
+| 2 | 数据治理       |  1-5  |  3-4  |  -  |                         |
+| 3 | 数据架构       |  1-5  |  3-4  |  -  |                         |
+| 4 | 数据应用流通   |  1-5  |  3    |  -  |                         |
+| 5 | 数据安全       |  1-5  |  3-4  |  -  |                         |
+| 6 | 数据质量       |  1-5  |  3    |  -  |                         |
+| 7 | 数据标准       |  1-5  |  3    |  -  |                         |
+| 8 | 数据生存周期   |  1-5  |  3    |  -  |                         |
+| 9 | 数据资产(新) |  1-5  |  2    |  -  |                         |
+
+## 关键缺口(每域 1 句话)
+- 数据战略: ...
+- 数据治理: ...
+- ...(9 行)
+
+## 跨部门校准记录
+- 业务侧访谈: ...(他们对治理的评价)
+- IT 侧访谈: ...(他们的能力边界)
+- 安全/合规侧访谈: ...(他们的红线)</code></pre>
+</div>
+
+<h3>画雷达图</h3>
+
+<p>
+自评表填完后,把"当前级"画成雷达图。最简单的方式:用 Excel / Numbers / 在线工具(如 <a href="https://www.chartjs.org/samples/latest/" target="_blank" rel="noopener">Chart.js</a>)画 9 边形雷达图。也可以用 Python(matplotlib 的 <code>plt.polar</code>)。
+</p>
+
+<p>
+<strong>雷达图的真正价值不是好看,是"形状"</strong>。理想的形状是<strong>外圈接近圆形</strong>(各域均衡);畸形雷达(某域特别低)说明治理是"瘸腿"的,投资优先级就指向那个低点。
+</p>
+
+<div class="callout">
+  <div class="label">读图练习</div>
+  <p style="margin:0;">
+  如果你画完发现<strong>"数据资产"域在 L1、"数据安全"在 L1,其他都在 L3</strong> —— 这是非常典型的中国组织现状(传统治理关注 DQ/标准,但 2.0 新域和合规短板)。改进路线的优先级就很清楚:先补"数据安全"和"数据资产"。<strong>雷达图的形状本身就是路线图的依据</strong>。
+  </p>
+</div>
+
+<!-- ====================================================== -->
+<h2 id="dcam-vs-dcmm">3. DCAM vs DCMM:选哪个(10 分钟)</h2>
+
+<p>
+国际同行常用 <a href="https://edmcouncil.org/frameworks/dcam/" target="_blank" rel="noopener">EDM Council 的 DCAM</a>(Data Management Capability Assessment Model)。两者常被放在一起比较。简短决策:
+</p>
+
+<table>
+  <thead><tr><th>维度</th><th>DCMM(GB/T 36073)</th><th>DCAM(EDM Council)</th></tr></thead>
+  <tbody>
+    <tr><td>来源</td><td>中国国标,主笔 <strong>CESI</strong></td><td>EDM Council,金融业起源</td></tr>
+    <tr><td>目的</td><td><strong>评估 + 发证</strong>(工信部授权机构)</td><td><strong>自评 + 改进</strong>(不发证)</td></tr>
+    <tr><td>能力域</td><td>9 域(2.0),含<strong>数据资产</strong></td><td>8 大能力 + 子项</td></tr>
+    <tr><td>中国语境适配</td><td>★★★★★(含数据要素、合规强)</td><td>★★(需翻译,不含中国政策)</td></tr>
+    <tr><td>金融业国际认可</td><td>★★</td><td>★★★★★</td></tr>
+    <tr><td>费用</td><td>L2 ~12-20万 / L3 ~30万 / L4 ~50万</td><td>会员费 + 培训,评估自费</td></tr>
+    <tr><td>补贴</td><td><strong>地方政府普遍补贴</strong>(10-40 万一次性)</td><td>无</td></tr>
+  </tbody>
+</table>
+
+<div class="callout">
+  <div class="label">怎么选</div>
+  <p style="margin:0;">
+  <strong>在中国组织 → DCMM</strong>:政策契合、可发证、有补贴。<strong>跨国/金融外资机构 → DCAM</strong>:国际认可度高。<strong>两者都用</strong>:用 DCMM 做合规和发证,用 DCAM 做内部改进(两者方法论 70% 重叠)。本课教学用 DCMM,因为它是国标且时效最新。
+  </p>
+</div>
+
+<p class="sidenote">
+<strong>评估流程</strong>(DCMM 正式评估):① 准备期(自评 + 整改,通常 2-4 个月)→ ② 第三方机构现场评估(工信部授权,约 6 家:赛西、赛宝、软测中心等)→ ③ CFEII(中国电子信息行业联合会)专家评议 → ④ 发证(有效期 3 年)。详见 <a href="https://www.dcmm-cfeii.com/" target="_blank" rel="noopener">dcmm-cfeii.com 官方平台</a>。
+</p>
+
+<!-- ====================================================== -->
+<h2 id="roadmap">4. 6–12 月改进路线(20 分钟)</h2>
+
+<h3>按投入产出比排序,不是按域编号排序</h3>
+
+<p>
+自评表写完后,直觉是"每个域都补一下"。错。<strong>预算和时间有限,必须排序</strong>。改进路线的核心动作是<strong>把差距翻译成具体的、可立项的工作项</strong>,然后按"投入产出比"排优先级。
+</p>
+
+<table>
+  <thead><tr><th>排序原则</th><th>含义</th></tr></thead>
+  <tbody>
+    <tr><td>合规驱动 > 业务驱动 > 完美驱动</td><td>数据安全/分类分级(L7 课)不补会被罚款,优先</td></tr>
+    <tr><td>低垂果实 > 高悬果实</td><td>建术语表(几周)&gt; 重建数据架构(几个月)</td></tr>
+    <tr><td>解锁他人 > 单点优化</td><td>目录/血缘上线,解锁下游 10 个团队</td></tr>
+    <tr><td>能度量 > 不能度量</td><td>有清晰 KPI 的动作优先(方便后续向 Sponsor 证明价值)</td></tr>
+  </tbody>
+</table>
+
+<div class="exercise">
+  <h3>练习 3.2 · 6–12 月改进路线 <span class="badge">15 min</span></h3>
+  <p>新建 <code>deliverables/improvement-roadmap-v0.1.md</code>。基于你的自评表,选出 <strong>5 个动作</strong>(不要多,5 个已经是 6-12 月极限),按下表填:</p>
+  <pre><code># 6-12 月改进路线 v0.1
+
+> 基于 DCMM 自评 v0.1 的差距分析
+
+| 序 | 动作                    | 域        | 当前级→目标级 | 预计周期  | 投入(人月) | 产出物                  |
+|---:|------------------------|----------|:----------:|:--------:|:--------:|------------------------|
+|  1 | [具体动作,如"建术语表"] | 数据标准  |   1 → 2    |  2 个月  |   0.5    | 100 个核心术语 + Owner  |
+|  2 | ...                    |          |            |          |          |                        |
+|  3 | ...                    |          |            |          |          |                        |
+|  4 | ...                    |          |            |          |          |                        |
+|  5 | ...                    |          |            |          |          |                        |
+
+## 优先级排序理由
+1. [为什么这个排第一,如"合规硬要求"]
+2. ...
+
+## 依赖关系
+- 动作 2 依赖动作 1:[说明]
+- ...
+
+## 向 Sponsor 汇报的"一句话价值"
+"通过这 5 个动作,数据治理成熟度从平均 [X.X] 级提升到 [Y.Y] 级,核心合规风险清零,预计 [Z] 业务指标受益。"</code></pre>
+</div>
+
+<div class="quiz" data-correct="b">
+  <div class="q">Q2 · 一个域里有 5 个能力项,分别打 L1/L2/L3/L4/L5,该域最终定级?</div>
+  <ul>
+    <li data-k="a">取平均,定 L3</li>
+    <li data-k="b">取最低,定 L1</li>
+    <li data-k="c">取众数,看哪个多</li>
+    <li data-k="d">由评估师主观判断</li>
+  </ul>
+  <div class="reveal">
+  <strong>答案:B</strong>。DCMM 的成熟度定级<strong>取最低</strong>。"一域之水平取决于最短板"是成熟度模型的铁律 —— 否则一个域有 5 个能力项,4 个 L1 加 1 个 L5 平均成 L3,会得出"这域挺稳健"的错误结论。这也是为什么真实评估比自评低 —— 自评容易把平均当定级,评估师按最低项砍。A/C 是常见误解;D 是把"取最低"误读成"无规则"。
+  </div>
+</div>
+
+<div class="quiz" data-correct="c">
+  <div class="q">Q3 · DCMM 2.0 新增的"数据资产"域,在 DAMA-DMBOK 里有对应吗?</div>
+  <ul>
+    <li data-k="a">对应 DMBOK 的 Data Security 区</li>
+    <li data-k="b">对应 DMBOK 的 Metadata 区</li>
+    <li data-k="c">没有对应,是中国特有</li>
+    <li data-k="d">对应 DMBOK 的 Data Governance</li>
+  </ul>
+  <div class="reveal">
+  <strong>答案:C</strong>。"数据资产"域(权属 / 价值评估 / 资产运营)对应中国的"数据要素市场化"政策(数据作为生产要素、可入表、可流通)。DAMA-DMBOK 是西方实践总结,完全不涉及数据确权、估值、入表 —— 这是<strong>中国治理实践独有的政策维度</strong>。A/B/D 都是把西方框架强套到这个新概念上,但概念本身在 DMBOK 不存在。
+  </div>
+</div>
+
+<!-- ====================================================== -->
+<hr class="sep">
+
+<h2 id="recap">本课要点回顾</h2>
+
+<ol>
+  <li><strong>DCMM 2.0 是 9 域不是 8 域</strong>:新增"数据资产",改"数据应用流通"。2026-07-01 生效。</li>
+  <li><strong>"数据要素运营"是叙事不是域</strong>:真正的域叫"数据资产"。</li>
+  <li><strong>自评定级取最低项</strong>:不是平均,不是众数。自评默认会被砍 1 级。</li>
+  <li><strong>雷达图的形状就是路线图的依据</strong>:畸形优先补短板。</li>
+  <li><strong>改进路线按投入产出比排</strong>:合规 > 低垂果实 > 解锁他人 > 能度量。</li>
+</ol>
+
+<h2 id="primary-source">推荐一手阅读</h2>
+
+<p>
+<strong>本课主源 1</strong>:<a href="https://std.samr.gov.cn/gb/search/gbDetailed?id=473EBB99D6AB455EE06397BE0A0ABB9A" target="_blank" rel="noopener">GB/T 36073-2025 标准记录(SAMR 国家标准信息公共服务平台)</a>。官方权威记录。注:openstd 全文页面可能仍在上线中,如未全文公开,此条目记录仍为准。
+</p>
+
+<p>
+<strong>本课主源 2</strong>:<a href="https://www.dcmm-cfeii.com/" target="_blank" rel="noopener">DCMM 评估官方平台(CFEII 中国电子信息行业联合会)</a>。申请评估、查证证书、查评估机构,都在这。
+</p>
+
+<p>
+<strong>DCAM 对比阅读</strong>:<a href="https://edmcouncil.org/frameworks/dcam/" target="_blank" rel="noopener">EDM Council DCAM v3 概览</a>。理解国际同行怎么做成熟度,以及为什么在中国通常优先用 DCMM。
+</p>
+
+<h2 id="next">下一课预告</h2>
+
+<p>
+<strong>第 04 课 · 元数据与目录:DataHub PoC</strong>。
+成熟度评估告诉你"数据标准"和"数据架构"是短板,接下来用工具落地。我们用 <strong>DataHub</strong>(LinkedIn 起源的开源数据目录)在本地 Docker 起一套可用环境,采集一个真实数据源(PostgreSQL / MySQL / dbt)的元数据。<strong>会给你可直接运行的 docker-compose 命令</strong>。这是技术侧三连课(L04/L05/L06)的第一课。
+</p>
+
+<div class="ask-teacher">
+<strong>有疑问就问老师(我)</strong>。比如:你组织某个域的当前级拿不准(贴具体情况)、5 个改进动作排序纠结、Sponsor 看不懂雷达图怎么解释、不知道要不要花钱请贯标咨询公司。贴出来,我们一起拆。
+</div>
+
+</main>
+
+<footer class="lesson">
+  <div>
+    <a href="../../index.html">总览</a> ·
+    <a href="0002-operating-model.html">← L02</a> ·
+    <a href="#">L04 元数据与目录 →</a>
+  </div>
+  <div>Lesson 03 · DCMM 2.0 Maturity Assessment</div>
+</footer>
+
+</body>
+</html>
