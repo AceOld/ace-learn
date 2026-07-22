@@ -1,0 +1,410 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="theme-color" content="#fefefe" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#1a1814" media="(prefers-color-scheme: dark)">
+<meta name="description" content="数据治理第 10 课:parquet 列式存储机制与单机 OLAP 引擎选型(DuckDB / ClickHouse / Polars / chDB),含可运行 benchmark。">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<title>第 10 课 · Parquet 存储与查询:引擎选型实战</title>
+<link rel="stylesheet" href="../assets/course.css">
+<script src="../assets/quiz.js" defer></script>
+</head>
+<body>
+
+<header class="lesson">
+  <div class="crumb">
+    <a href="../../index.html">总览</a> ·
+    <a href="0009-data-architecture-layering.html">← L09</a> ·
+    Lesson <strong>10</strong>
+  </div>
+  <h1>Parquet 存储与查询 —— 引擎选型实战</h1>
+  <p class="subtitle">L09 用了 DuckDB 查 parquet。本课回答:为什么是 DuckDB 不是别的?什么场景该换引擎?</p>
+  <div class="meta">
+    节奏:约 80 分钟 · 产出物:可运行 benchmark + 选型决策表 + 引擎对比矩阵
+  </div>
+</header>
+
+<main>
+
+<div class="callout">
+  <div class="label">承接关系</div>
+  <p style="margin:0;">
+  L09 用 DuckDB 查 parquet,但<strong>没讲为什么</strong>。本课补这块:parquet 文件格式本身的机制、不同引擎如何榨取它、单机场景怎么选 DuckDB / ClickHouse / Polars / chDB。<strong>学完你能在 5 分钟内决定该用哪个</strong>。
+  </p>
+</div>
+
+<div class="deliverable">
+  <div class="label">本课产出物</div>
+  <ol style="margin:0; padding-left:1.3rem;">
+    <li><strong>parquet 四大机制理解</strong>(列存/row group 统计/向量化/不可变)</li>
+    <li><strong>可运行 benchmark</strong>:DuckDB vs Polars vs chDB 查同一份 parquet</li>
+    <li><strong>单机 OLAP 选型决策表</strong>(5 个维度)</li>
+  </ol>
+</div>
+
+<!-- ====================================================== -->
+<h2 id="parquet-why">1. Parquet 凭什么碾压 CSV(10 分钟)</h2>
+
+<p>
+CSV/JSON 是<strong>行式 + 文本</strong>。Parquet 是<strong>列式 + 二进制 + 带统计</strong>。这四个特性叠加,使分析查询<strong>快 10–100 倍、省 5–20 倍存储</strong>。
+</p>
+
+<table>
+  <thead><tr><th>机制</th><th>原理</th><th>对查询的影响</th></tr></thead>
+  <tbody>
+    <tr>
+      <td><strong>列式存储</strong></td>
+      <td>同列同类型数据连续存放</td>
+      <td>压缩率高(类型一致)+ <strong>列裁剪</strong>(SELECT a,b 只读 a,b 两列)</td>
+    </tr>
+    <tr>
+      <td><strong>Row Group 统计</strong></td>
+      <td>每 ~128MB row group 存 min/max/count/bloom</td>
+      <td><strong>谓词下推</strong>:WHERE 跳过整个 row group 不读</td>
+    </tr>
+    <tr>
+      <td><strong>向量化布局</strong></td>
+      <td>数据按 1024/2048 行的 page 组织</td>
+      <td>批量读取 → SIMD 指令加速(引擎吃满 CPU)</td>
+    </tr>
+    <tr>
+      <td><strong>不可变(immutable)</strong></td>
+      <td>写一次读多次,不修改</td>
+      <td>适合 WORM(写一次读多次),不适合频繁 upsert</td>
+    </tr>
+  </tbody>
+</table>
+
+<div class="callout warn">
+  <div class="label">⚠ 关键认知</div>
+  <p style="margin:0;">
+  <strong>同一份 parquet,不同引擎能榨出的性能差异可达 10 倍</strong>。差别在引擎有没有好好用上面四个特性。下面讲的就是怎么选对引擎。
+  </p>
+</div>
+
+<div class="quiz" data-correct="c">
+  <div class="q">Q1 · 同样一份 10GB parquet,两个引擎都能跑 SELECT a,b WHERE c&gt;100,但引擎 A 比 B 快 5 倍。最可能的原因?</div>
+  <ul>
+    <li data-k="a">A 的 CPU 更快</li>
+    <li data-k="b">A 用了更快的磁盘</li>
+    <li data-k="c">A 做了谓词下推和列裁剪</li>
+    <li data-k="d">A 偷懒只读了 2GB</li>
+  </ul>
+  <div class="reveal">
+  <strong>答案:C</strong>。同一份文件、同一硬件,差异来自<strong>引擎的查询优化</strong>:列裁剪(只读 a/b/c 不读其他几十列)+ 谓词下推(读 row group 统计,跳过 c≤100 的 row group)。这就是为什么"parquet 是基础,引擎是关键"。<strong>选错引擎,parquet 的优势吃不到一半</strong>。A/B 是硬件层面(题设说同一硬件);D 是误读。
+  </div>
+</div>
+
+<!-- ====================================================== -->
+<h2 id="engines-landscape">2. 单机 OLAP 引擎全景(15 分钟)</h2>
+
+<h3>2026-07 主流引擎</h3>
+
+<table>
+  <thead><tr><th>引擎</th><th>版本(2026-07)</th><th>定位</th><th>许可</th></tr></thead>
+  <tbody>
+    <tr><td><strong>DuckDB</strong></td><td>1.5.4(2026-06)</td><td>嵌入式 SQL OLAP 数据库,"SQLite for OLAP"</td><td>MIT</td></tr>
+    <tr><td><strong>ClickHouse</strong></td><td>26.6.2(2026-06)</td><td>server 模式 OLAP 数据库,自研 MergeTree 存储</td><td>Apache 2.0</td></tr>
+    <tr><td><strong>Polars</strong></td><td>1.42+(2026-06)</td><td>DataFrame 库(Rust + Arrow),惰性执行</td><td>MIT</td></tr>
+    <tr><td><strong>chDB</strong></td><td>4.2.1(2026-07)</td><td>嵌入式 ClickHouse内核(像 DuckDB 但 CH 引擎)</td><td>Apache 2.0</td></tr>
+    <tr><td><strong>DataFusion</strong></td><td>54.0.0(2026-06)</td><td>Rust 查询引擎(Apache 项目),常嵌入其他工具</td><td>Apache 2.0</td></tr>
+  </tbody>
+</table>
+
+<div class="callout warn">
+  <div class="label">⚠ ClickHouse 的关键澄清</div>
+  <p style="margin:0;">
+  ClickHouse 主力存储是<strong>自研 MergeTree</strong>(不是 parquet)。它读 parquet 时用 row group 统计做谓词下推,但<strong>真正的数据跳过神技(skip indexes:minmax/bloom)只在 MergeTree 表上生效</strong>。如果你拿一堆 parquet 给 ClickHouse 查,它的优势打折 —— 不如直接导进 MergeTree。
+  </p>
+</div>
+
+<h3>定位边界(常被混淆的三者)</h3>
+
+<table>
+  <thead><tr><th>工具</th><th>思维范式</th><th>本质</th><th>适合谁</th></tr></thead>
+  <tbody>
+    <tr><td><strong>DuckDB</strong></td><td>SQL 优先</td><td>完整数据库(ACID/MVCC/扩展)</td><td>想用 SQL 跑分析的</td></tr>
+    <tr><td><strong>Polars</strong></td><td>代码优先(DataFrame)</td><td>库,无持久化/事务</td><td>从 Pandas/Spark 来的</td></tr>
+    <tr><td><strong>chDB</strong></td><td>SQL + ClickHouse 方言</td><td>嵌入式 CH(同内核)</td><td>已在 CH 生态、想本地化</td></tr>
+  </tbody>
+</table>
+
+<p class="sidenote">
+<strong>一句话区分</strong>:SQL 思维 → DuckDB;代码/DataFrame 思维 → Polars;已在 ClickHouse 生态 → chDB。这三个互相覆盖 70%,但<strong>各自有不可替代的 30%</strong>。
+</p>
+
+<!-- ====================================================== -->
+<h2 id="features-by-engine">3. 引擎对 parquet 特性的利用度(15 分钟)</h2>
+
+<p>
+不是所有引擎都完整利用 parquet 的特性。下面是<strong>核实过的事实</strong>(2026-07)。
+</p>
+
+<table>
+  <thead><tr><th>特性</th><th>DuckDB</th><th>ClickHouse</th><th>Polars</th><th>DataFusion</th></tr></thead>
+  <tbody>
+    <tr><td><strong>列裁剪</strong></td><td>✅</td><td>✅</td><td>✅</td><td>✅</td></tr>
+    <tr><td><strong>谓词下推(row group 统计)</strong></td><td>✅</td><td>✅</td><td>✅(<code>scan_parquet</code>)</td><td>✅</td></tr>
+    <tr><td><strong>Page 级谓词下推</strong></td><td>✅</td><td>部分</td><td>部分</td><td>✅</td></tr>
+    <tr><td><strong>Bloom filter</strong></td><td>✅ 读+写</td><td>(主要 MergeTree)</td><td>❌</td><td>✅</td></tr>
+    <tr><td><strong>向量化执行</strong></td><td>✅(2048)</td><td>✅</td><td>✅</td><td>✅</td></tr>
+    <tr><td><strong>Metadata 缓存</strong></td><td>✅</td><td>✅</td><td>部分</td><td>✅(50.0+)</td></tr>
+  </tbody>
+</table>
+
+<div class="callout warn">
+  <div class="label">⚠ Polars 最常见的反模式</div>
+  <p style="margin:0;">
+  <code>pl.read_parquet('f.parquet').lazy().filter(...)</code> 是<strong>错的</strong> —— 这会先全量读再过滤,谓词下推失效。正确写法:
+  </p>
+  <pre style="margin-top:0.6rem; margin-bottom:0;"><code># ❌ 错:全量读再过滤
+df = pl.read_parquet('f.parquet').lazy().filter(pl.col('c') > 100)
+
+# ✅ 对:扫描时下推过滤
+df = pl.scan_parquet('f.parquet').filter(pl.col('c') > 100)</code></pre>
+</div>
+
+<h3>什么时候 parquet 反而是错的选择?</h3>
+
+<table>
+  <thead><tr><th>场景</th><th>为什么 parquet 不合适</th><th>替代</th></tr></thead>
+  <tbody>
+    <tr><td>小数据(&lt;100MB)</td><td>row group 元数据开销超过数据本身</td><td>CSV / JSON / SQLite</td></tr>
+    <tr><td>频繁 upsert</td><td>parquet 不可变,改一行重写整文件</td><td>Iceberg / Delta Lake</td></tr>
+    <tr><td>OLTP(事务)</td><td>列存不适合点查点写</td><td>PostgreSQL / MySQL</td></tr>
+    <tr><td>流式写入</td><td>parquet 需缓冲成 row group 才能写</td><td>Avro + Kafka</td></tr>
+    <tr><td>整行读取(全列)</td><td>列存没优势,反而有开销</td><td>Avro / JSON</td></tr>
+  </tbody>
+</table>
+
+<div class="quiz" data-correct="b">
+  <div class="q">Q2 · ClickHouse 的"数据跳过神技"(skip indexes)在什么场景下真正生效?</div>
+  <ul>
+    <li data-k="a">查任意 parquet 文件</li>
+    <li data-k="b">查 ClickHouse 自己的 MergeTree 表</li>
+    <li data-k="c">查 CSV 文件</li>
+    <li data-k="d">查 JSON 文件</li>
+  </ul>
+  <div class="reveal">
+  <strong>答案:B</strong>。ClickHouse 的 minmax/set/bloom_filter 等 skip indexes <strong>只在 MergeTree 表族上生效</strong>,不在任意 parquet 文件上。这是常被混淆的点 —— 很多人以为"ClickHouse 查 parquet 也快",其实它读 parquet 时只做了 row group 统计下推,<strong>真正的神技在 MergeTree 表上</strong>。所以用 ClickHouse 的最佳姿势是<strong>把 parquet 导入 MergeTree</strong>,而不是直接查 parquet。
+  </div>
+</div>
+
+<!-- ====================================================== -->
+<h2 id="benchmark">4. 可运行 Benchmark:DuckDB vs Polars vs chDB(20 分钟)</h2>
+
+<h3>准备数据(2 分钟)</h3>
+
+<pre><code>pip install duckdb polars chdb pyarrow
+
+# 用 DuckDB 生成 1000 万行测试 parquet
+python -c "
+import duckdb
+con = duckdb.connect()
+con.execute('''
+  COPY (
+    SELECT
+      range AS id,
+      random() * 1000 AS amount,
+      'user_' || cast(range % 10000 AS varchar) AS user_id,
+      cast('2026-01-01' AS date) + INTERVAL (range % 365) DAY AS dt
+    FROM range(10000000)
+  ) TO 'test.parquet' (FORMAT parquet, ROW_GROUP_SIZE 100000);
+''')
+print('生成完成')" </code></pre>
+
+<h3>Benchmark A:DuckDB(2 分钟)</h3>
+
+<pre><code>import duckdb, time
+t0 = time.time()
+df = duckdb.sql("""
+  SELECT user_id, sum(amount) AS total, count(*) AS cnt
+  FROM 'test.parquet'
+  WHERE dt &gt;= '2026-06-01' AND amount &gt; 500
+  GROUP BY user_id ORDER BY total DESC LIMIT 10
+""").df()
+print(f"DuckDB: {time.time()-t0:.2f}s")
+print(df.head())</code></pre>
+
+<h3>Benchmark B:Polars(<strong>正确写法</strong>)(2 分钟)</h3>
+
+<pre><code>import polars as pl, time
+t0 = time.time()
+df = (
+    pl.scan_parquet('test.parquet')                      # ✅ scan 不是 read
+      .filter((pl.col('dt') >= pl.date(2026,6,1)) &
+              (pl.col('amount') > 500))                   # 谓词下推
+      .group_by('user_id')
+      .agg(pl.sum('amount').alias('total'),
+           pl.count().alias('cnt'))
+      .sort('total', descending=True)
+      .head(10)
+      .collect()                                          # 触发执行
+)
+print(f"Polars (正确): {time.time()-t0:.2f}s")</code></pre>
+
+<h3>Benchmark C:chDB(嵌入式 ClickHouse)(2 分钟)</h3>
+
+<pre><code>import chdb, time
+t0 = time.time()
+res = chdb.query("""
+  SELECT user_id, sum(amount) AS total, count(*) AS cnt
+  FROM file('test.parquet', Parquet)
+  WHERE dt &gt;= '2026-06-01' AND amount &gt; 500
+  GROUP BY user_id ORDER BY total DESC LIMIT 10
+""")
+print(f"chDB: {time.time()-t0:.2f}s")
+print(res)</code></pre>
+
+<div class="callout produce">
+  <div class="label">预期结果(1000 万行 × 4 列,普通笔记本)</div>
+  <p style="margin:0;">
+  DuckDB / Polars(正确)/ chDB 三者通常<strong>同一数量级</strong>(亚秒到秒级),具体取决于 CPU 核数和磁盘速度。<strong>这个 benchmark 不是为了找"最快",是为了让你看清三者写法差异 + 谓词下推的效果</strong>。
+  </p>
+</div>
+
+<div class="exercise">
+  <h3>练习 10.1 · 跑反模式对比 <span class="badge">10 min</span></h3>
+  <p>把 Polars 的代码改成反模式:</p>
+  <pre><code># ❌ 反模式:先 read 再 filter(谓词下推失效)
+df_bad = pl.read_parquet('test.parquet').lazy() \
+    .filter((pl.col('dt') >= pl.date(2026,6,1)) &
+            (pl.col('amount') > 100)) \
+    .group_by('user_id').agg(pl.sum('amount').alias('total')) \
+    .collect()</code></pre>
+  <p>对比 <code>read_parquet().lazy()</code> 和 <code>scan_parquet()</code> 的耗时差。<strong>这个差距就是谓词下推的价值</strong>,也解释了为什么"用对工具"比"用快工具"更重要。</p>
+</div>
+
+<!-- ====================================================== -->
+<h2 id="write-tuning">5. 写 parquet 的调优(5 分钟)</h2>
+
+<table>
+  <thead><tr><th>参数</th><th>影响</th><th>建议</th></tr></thead>
+  <tbody>
+    <tr><td><strong>ROW_GROUP_SIZE</strong></td><td>太小:每 group 元数据开销大,5–10× 慢;太大:内存爆</td><td><strong>100K–1M 行/group</strong></td></tr>
+    <tr><td><strong>COMPRESSION</strong></td><td>snappy:快、文件大;zstd:慢一点、文件小 25–40%</td><td>热数据 snappy / 冷数据 zstd</td></tr>
+    <tr><td><strong>列顺序</strong></td><td>过滤频繁的列放前面,row group 统计更有效</td><td>按"过滤频率"排</td></tr>
+    <tr><td><strong>分区</strong></td><td>按 dt 分目录,谓词下推直接跳目录</td><td>常按 dt 分区</td></tr>
+  </tbody>
+</table>
+
+<pre><code>-- DuckDB 写 parquet 的推荐参数
+COPY (SELECT * FROM source) TO 'out.parquet' (
+  FORMAT parquet,
+  COMPRESSION zstd,             -- 冷数据用 zstd
+  ROW_GROUP_SIZE 100000         -- 10 万行/group
+);
+
+-- 分区写入(按 dt)
+COPY (SELECT * FROM source) TO 'partitioned/' (
+  FORMAT parquet,
+  PARTITION_BY (dt)             -- 生成 partitioned/dt=2026-07-01/...
+);</code></pre>
+
+<!-- ====================================================== -->
+<h2 id="decision">6. 选型决策树(10 分钟)</h2>
+
+<p>把上面的所有维度压成一张决策表。回答下面五个问题,就能定。</p>
+
+<table>
+  <thead><tr><th>问题</th><th>答案 → 选</th></tr></thead>
+  <tbody>
+    <tr><td><strong>1. SQL 还是代码思维?</strong></td><td>SQL → DuckDB / chDB;代码 → Polars</td></tr>
+    <tr><td><strong>2. 数据量?</strong></td><td>GB → DuckDB/Polars;TB+ 单机 → ClickHouse server</td></tr>
+    <tr><td><strong>3. 并发?</strong></td><td>单用户 → 嵌入式;多用户 → ClickHouse server</td></tr>
+    <tr><td><strong>4. 需要 upsert/事务?</strong></td><td>要 → Iceberg/Delta on parquet;不要 → 纯 parquet</td></tr>
+    <tr><td><strong>5. 已在哪个生态?</strong></td><td>CH 生态 → chDB/server;Arrow 生态 → DataFusion</td></tr>
+  </tbody>
+</table>
+
+<div class="callout">
+  <div class="label">三条决策捷径</div>
+  <ol style="margin:0; padding-left:1.3rem;">
+    <li><strong>90% 的单机分析场景</strong>:DuckDB 一把梭(SQL 友好、parquet 一等公民、零依赖)。</li>
+    <li><strong>已在 ClickHouse 生态</strong>:本地 chDB,生产 CH server。</li>
+    <li><strong>从 Pandas/Spark 来的、代码思维</strong>:Polars(惰性 + 谓词下推)。</li>
+  </ol>
+</div>
+
+<div class="quiz" data-correct="c">
+  <div class="q">Q3 · 单人分析师,10–50GB parquet 数据,主要写 SQL 查询,偶尔 Pandas 接 ML。最佳选择?</div>
+  <ul>
+    <li data-k="a">ClickHouse server(强但过重)</li>
+    <li data-k="b">Spark(分布式但单机杀鸡用牛刀)</li>
+    <li data-k="c">DuckDB(嵌入式 SQL,parquet 一等公民)</li>
+    <li data-k="d">纯 Pandas(全量读内存,parquet 优势吃不到)</li>
+  </ul>
+  <div class="reveal">
+  <strong>答案:C</strong>。单用户 + SQL 思维 + GB 级 parquet = <strong>DuckDB 教科书场景</strong>:嵌入式零依赖、SQL 直接查 parquet、列裁剪+谓词下推全开、内存不够能 spill。A 太重(单人为查询起 server);B 单机用 Spark 是反模式;D 全量读内存既慢又撑不下 50GB。DuckDB 还能通过 <code>df = duckdb.sql('...').df()</code> 直接和 Pandas 无缝衔接。
+  </div>
+</div>
+
+<div class="quiz" data-correct="b">
+  <div class="q">Q4 · 你的场景需要频繁 upsert(订单状态会变),应该用?</div>
+  <ul>
+    <li data-k="a">纯 parquet,定期重写整文件</li>
+    <li data-k="b">Iceberg 或 Delta Lake(在 parquet 上加 ACID)</li>
+    <li data-k="c">CSV(行式好改)</li>
+    <li data-k="d">JSON(灵活)</li>
+  </ul>
+  <div class="reveal">
+  <strong>答案:B</strong>。parquet 不可变,upsert 单行要重写整文件 = 灾难。<strong>Iceberg / Delta Lake / Hudi 是"表格式"</strong>,在 parquet 文件之上加 ACID + 时间旅行 + 高效 upsert,正是为这个场景设计的。A 是反模式;C/D 是退回原始格式(分析性能崩)。这就是为什么 L09 的 DWD 层在需要 SCD2 时,常在 Iceberg/Delta 之上实现。
+  </div>
+</div>
+
+<!-- ====================================================== -->
+<hr class="sep">
+
+<h2 id="recap">本课要点回顾</h2>
+
+<ol>
+  <li><strong>Parquet 四机制</strong>:列存 + row group 统计 + 向量化 + 不可变。</li>
+  <li><strong>同一份 parquet,引擎选错差 10×</strong>:谓词下推/列裁剪是关键。</li>
+  <li><strong>2026 单机 OLAP 五引擎</strong>:DuckDB(SQL 嵌入式)/ ClickHouse(server)/ Polars(DataFrame)/ chDB(嵌入 CH)/ DataFusion(Rust 引擎)。</li>
+  <li><strong>ClickHouse 神技只在 MergeTree</strong>:不是任意 parquet。</li>
+  <li><strong>Polars 必须 <code>scan_parquet</code></strong>:<code>read_parquet().lazy()</code> 是反模式。</li>
+  <li><strong>Parquet 不是万能</strong>:小数据 / upsert / OLTP 别用它。</li>
+  <li><strong>90% 单机场景 → DuckDB</strong>:SQL + parquet + 零依赖。</li>
+</ol>
+
+<h2 id="primary-source">推荐一手阅读</h2>
+
+<p>
+<strong>本课主源 1</strong>:<a href="https://duckdb.org/docs/lts/data/parquet/overview.html" target="_blank" rel="noopener">DuckDB Parquet 官方文档</a>。机制、谓词下推、bloom filter 的权威说明。
+</p>
+
+<p>
+<strong>本课主源 2</strong>:<a href="https://github.com/ClickHouse/ClickBench" target="_blank" rel="noopener">ClickBench(开放 benchmark 方法论)</a>。虽是 ClickHouse 维护但方法开放,看相对排名。</p>
+
+<p>
+<strong>谓词下推原理</strong>:<a href="https://pola.rs/posts/predicate-pushdown-query-optimizer/" target="_blank" rel="noopener">Polars 官方博客 Predicate Pushdown</a>。理解为什么 <code>scan</code> 不是 <code>read</code>。
+</p>
+
+<h2 id="next">本课与其他课程的关系</h2>
+
+<ul>
+  <li><strong>L09 数据架构分层</strong>:L09 用 DuckDB,本课解释"为什么是 DuckDB"。</li>
+  <li><strong>L04 元数据目录</strong>:目录要存"每个表的物理位置和格式",parquet 是其中的默认假设。</li>
+  <li><strong>L06 数据血缘</strong>:血缘常跨 parquet 文件追踪,DuckDB/Polars 的 <code>ref</code> 关系就是血缘。</li>
+  <li><strong>L07 合规</strong>:parquet 不可变 = 审计友好(留痕天然),但 upsert 难 = 需 Iceberg 加 ACID。</li>
+</ul>
+
+<div class="ask-teacher">
+<strong>有疑问就问老师(我)</strong>。卡点比如:你的具体场景该选哪个引擎、benchmark 跑不出预期数字、Polars 写法不确定谓词有没有下推、ClickHouse vs DuckDB 拿不定。贴你的场景和 benchmark 结果,我帮你看。
+</div>
+
+</main>
+
+<footer class="lesson">
+  <div>
+    <a href="../../index.html">总览</a> ·
+    <a href="0009-data-architecture-layering.html">← L09</a> ·
+    <span style="color:#888;">L10 引擎选型</span>
+  </div>
+  <div>Lesson 10 · Parquet & Engine Selection</div>
+</footer>
+
+</body>
+</html>
