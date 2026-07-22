@@ -1,0 +1,488 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="theme-color" content="#fefefe" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#1a1814" media="(prefers-color-scheme: dark)">
+<meta name="description" content="量化数学第 09 课:量化数据层架构选型(A股散户/小团队,无 tick 数据)。AKShare + parquet + DuckDB/Polars 完整实操。">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<title>第 09 课 · 量化数据层架构选型(A股散户)</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
+<script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
+<script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"
+        onload="renderMathInElement(document.body,{delimiters:[{left:'$$',right:'$$',display:true},{left:'$',right:'$',display:false}]});"></script>
+<link rel="stylesheet" href="../assets/course.css">
+<script src="../assets/quiz.js" defer></script>
+</head>
+<body>
+
+<header class="lesson">
+  <div class="crumb">
+    <a href="../../index.html">总览</a> ·
+    <a href="0008-black-scholes-ito.html">← Q·08</a> ·
+    Lesson <strong>09</strong>(数据工程专题)
+  </div>
+  <h1>量化数据层架构选型(A股散户)</h1>
+  <p class="subtitle">前 8 课都是"假设数据已就绪"做数学。本课补工程短板:数据从哪来、怎么存、怎么查 —— 无 tick、散户/小团队视角。</p>
+  <div class="meta">
+    节奏:约 80 分钟 · 产出物:数据层架构图 + 可运行的 AKShare→parquet 流水线 + 选型决策表
+  </div>
+</header>
+
+<main>
+
+<div class="callout">
+  <div class="label">为什么量化要单独讲数据层</div>
+  <p style="margin:0;">
+  数据治理 L09(分层)+ L10(引擎选型)的框架对量化<strong>部分适用但不完全</strong>。量化的主轴是 <strong>symbol × timestamp</strong>(不是业务事件),且写少读多、因子列爆炸、点查与扫描并存。本课把这些差异讲透,并给散户可落地的方案。
+  </p>
+</div>
+
+<div class="deliverable">
+  <div class="label">本课产出物</div>
+  <ol style="margin:0; padding-left:1.3rem;">
+    <li><strong>数据层架构图(你的场景版)</strong>:从 AKShare 到内存的完整链路</li>
+    <li><strong>可运行的数据采集流水线</strong>:AKShare → 分区 parquet</li>
+    <li><strong>选型决策表</strong>:什么场景换 ClickHouse / ArcticDB / KDB+</li>
+    <li><strong>四个数据陷阱防护</strong>:前复权时变性 / 存活偏差 / 节假日 / 临时停牌</li>
+  </ol>
+</div>
+
+<!-- ====================================================== -->
+<h2 id="why-quant-different">1. 量化和普通 OLAP 的本质差异(8 分钟)</h2>
+
+<table>
+  <thead><tr><th>维度</th><th>普通 OLAP(L10)</th><th>量化交易</th></tr></thead>
+  <tbody>
+    <tr><td>主轴</td><td>业务事件</td><td><strong>symbol × timestamp 双维度</strong></td></tr>
+    <tr><td>写入</td><td>随机用户写</td><td><strong>收盘批量灌入</strong>(每日 1 次)</td></tr>
+    <tr><td>读取</td><td>聚合查询为主</td><td><strong>回测全市场扫描 + 点查并存</strong></td></tr>
+    <tr><td>列数</td><td>相对稳定</td><td><strong>因子爆炸</strong>(几十到上千列)</td></tr>
+    <tr><td>延迟</td><td>秒级</td><td>回测分钟级 + 实盘亚秒</td></tr>
+    <tr><td>形态</td><td>表</td><td>Tick / Bar / Factor / Fundamental / Alt 多形态</td></tr>
+  </tbody>
+</table>
+
+<div class="callout warn">
+  <div class="label">⚠ 这些差异决定选型不能照搬</div>
+  <p style="margin:0;">
+  L10 的结论"90% 单机场景 → DuckDB"在量化里仍然成立,但<strong>多了一个维度要权衡:时序与 symbol 的复合查询</strong>(如"找所有股票在过去 250 天的 MA20 最大值")。这种查询普通 OLAP 不常见,在量化里是日常。引擎的<strong>ASOF JOIN</strong>、<strong>rolling 窗口</strong>能力是关键。
+  </p>
+</div>
+
+<!-- ====================================================== -->
+<h2 id="data-sources">2. A股数据源(2026 实情)(12 分钟)</h2>
+
+<table>
+  <thead><tr><th>源</th><th>版本(2026-07)</th><th>许可</th><th>适用</th></tr></thead>
+  <tbody>
+    <tr><td><strong>AKShare</strong></td><td>1.18.70</td><td>MIT</td><td><strong>A股散户首选</strong>:免费、维护活跃、覆盖东财/新浪/同花顺</td></tr>
+    <tr><td><strong>Tushare Pro</strong></td><td>—</td><td><strong>非商业、个人、可撤销</strong></td><td>需 token + 积分;基本面/财务数据更全;商业要单独授权</td></tr>
+    <tr><td><strong>BaoStock</strong></td><td>0.8.9(2024-05)</td><td>免费(无 OSI 许可)</td><td>历史从 1990 起,作交叉校验用</td></tr>
+    <tr><td><strong>yfinance</strong></td><td>—</td><td>Apache 2.0</td><td>A股可用 <code>.SS</code>/<code>.SZ</code> 后缀,但延迟大、大陆需代理</td></tr>
+  </tbody>
+</table>
+
+<div class="callout warn">
+  <div class="label">⚠ AKShare 的真实坑(2026)</div>
+  <p style="margin:0;">
+  <strong>东财</strong>(东方财富)端点是断裂高发区 —— 他们改 JSON/API 结构,AKShare 就跟发版修。命中时切到<strong>新浪源</strong>。另外<strong>高频调东财会被 IP 封</strong>,记得 <code>time.sleep(1)</code>。这些都是免费数据的代价。
+  </p>
+</div>
+
+<div class="callout warn">
+  <div class="label">⚠ Tushare 许可陷阱</div>
+  <p style="margin:0;">
+  Tushare Pro 官方协议明确:<strong>"个人的、不可转让的、非商业用途的、可撤销的"</strong>。<strong>个人研究 OK,任何商业/产品化都要单独授权</strong>。如果你的策略可能商业化,从第一天就别依赖 Tushare,改用 AKShare。
+  </p>
+</div>
+
+<h2 id="data-traps">3. 四个数据陷阱(必须先知道)(15 分钟)</h2>
+
+<p>
+这四个陷阱和数学无关,但<strong>会让你的回测结果系统性失真</strong>。新手最常踩,踩了不知道。
+</p>
+
+<h3>陷阱 1:前复权(qfq)有时变性</h3>
+
+<p>
+AKShare 的 <code>stock_zh_a_hist(adjust="qfq")</code> 给的是<strong>前复权</strong>价格。<strong>前复权锚定"今天的最新复权因子"</strong> —— 这意味着:
+</p>
+
+<blockquote>
+你今天拉的 2024 年 1 月某只股票的 qfq 收盘价,<strong>和下周该公司分红后你再拉的 2024 年 1 月 qfq 收盘价,会不一样</strong>。
+</blockquote>
+
+<p>
+后果:如果你<strong>跨日期拼接 qfq 数据</strong>(今天拉 2023,明天拉 2024),拼接处会出现<strong>幻觉跳空/涨跌停</strong>。这是回测失真的头号来源。
+</p>
+
+<div class="callout produce">
+  <div class="label">✅ 正确做法</div>
+  <ol style="margin:0; padding-left:1.3rem;">
+    <li><strong>存"不复权" + "复权因子"两份数据</strong>,按需现算 qfq/hfq</li>
+    <li>或用<strong>后复权(hfq)</strong>:锚定 IPO 日,历史价格稳定,适合回测</li>
+    <li>绝不要<strong>在不同日期分批拉 qfq 然后拼接</strong></li>
+  </ol>
+</div>
+
+<h3>陷阱 2:存活偏差(Survivorship Bias)</h3>
+
+<p>
+AKShare 的 <code>stock_info_a_code_name</code> <strong>只返回当前在市的股票</strong>。如果你用它生成股票池,然后回测过去 5 年,你<strong>只测了"活下来的公司"</strong> —— 退市股(常常是表现差的)被系统排除,回测结果会高估策略表现。
+</p>
+
+<div class="callout produce">
+  <div class="label">✅ 正确做法</div>
+  <ol style="margin:0; padding-left:1.3rem;">
+    <li>维护一份<strong>历史股票池</strong>(含已退市):Tushare <code>stock_basic(list_status='D')</code>(需积分)或定期快照累积</li>
+    <li>在 L05 数据质量检查里加"退市股覆盖率"作为度量</li>
+  </ol>
+</div>
+
+<h3>陷阱 3:交易日历(节假日)</h3>
+
+<p>
+回测必须用<strong>真实交易日</strong>,不是日历日。A 股一年约 242 个交易日(非 365)。国庆/春节闭市、临时休市(哀悼日)都要排除。
+</p>
+
+<div class="callout produce">
+  <div class="label">✅ 推荐</div>
+  <p style="margin:0;">
+  <code>exchange_calendars</code> 库(PyPI),免费无 token,包含 <strong>XSHG</strong>(上交所)日历,<strong>追踪临时休市</strong>。回测第一步:
+  </p>
+  <pre style="margin-top:0.6rem; margin-bottom:0;"><code>import exchange_calendars as xcals
+sse = xcals.get_calendar("XSHG")
+trading_days = sse.sessions_in_range("2019-01-01", "2024-12-31")</code></pre>
+</div>
+
+<h3>陷阱 4:除权除息日的收益断层</h3>
+
+<p>
+除权除息日(分红/送股),<strong>不复权价格会有跳空</strong>(看起来像暴跌),前复权/后复权会平滑掉。用哪个价格计算收益,直接决定回测结果。
+</p>
+
+<div class="quiz" data-correct="b">
+  <div class="q">你周一拉了 2023 年某股 qfq 数据,周三该公司分红后你又拉了 2023 年同股 qfq 数据。两次数据会?</div>
+  <ul>
+    <li data-k="a">完全相同(历史不变)</li>
+    <li data-k="b">不同(qfq 锚定今天,分红后整段历史都变了)</li>
+    <li data-k="c">只有分红当天不同</li>
+    <li data-k="d">只有未来数据不同</li>
+  </ul>
+  <div class="reveal">
+  <strong>答案:B</strong>。<strong>前复权锚定"今天"的最新复权因子</strong> —— 公司分红后,复权因子变了,<strong>整段历史 qfq 价格都会被重新计算</strong>。这就是为什么"跨日期拼接 qfq" 会产生幻觉跳空。<strong>解决:存不复权+复权因子,现算 hfq 用于回测</strong>。A 错;C/D 是常见误解(以为只影响分红当天)。
+  </div>
+</div>
+
+<div class="quiz" data-correct="c">
+  <div class="q">用 AKShare 的 <code>stock_info_a_code_name</code> 生成股票池做 5 年回测,主要问题?</div>
+  <ul>
+    <li data-k="a">数据有延迟</li>
+    <li data-k="b">列名不规范</li>
+    <li data-k="c">引入存活偏差(只含在市股票)</li>
+    <li data-k="d">退市股票数据过多</li>
+  </ul>
+  <div class="reveal">
+  <strong>答案:C</strong>。<code>stock_info_a_code_name</code> <strong>只返回当前在市股票</strong>,用它做历史回测 = 系统性排除了已退市(表现差的)公司 = <strong>回测结果被高估</strong>。这是存活偏差的经典来源。<strong>解决:维护含退市股的历史股票池</strong>。A/B 是次要问题;D 反了(是缺退市股,不是多)。
+  </div>
+</div>
+
+<!-- ====================================================== -->
+<h2 id="architecture">4. 散户量化的典型数据层架构(15 分钟)</h2>
+
+<h3>四层架构(对比 L09 数据治理分层,但有量化特色)</h3>
+
+<pre><code>┌─────────────────────────────────────────────────────────┐
+│  L0 采集层(AKShare / Tushare / BaoStock)                │
+│      - 收盘后定时拉取                                    │
+│      - time.sleep(1) 避免被东财封 IP                      │
+└─────────────────────────┬───────────────────────────────┘
+                          ▼
+┌─────────────────────────────────────────────────────────┐
+│  L1 原始层(parquet 分区文件,不复权 + 复权因子)         │
+│      /data/daily/date=2026-07-21/data.parquet           │
+│      /data/adjust/date=2026-07-21/data.parquet          │
+│      hive 分区 + zstd 压缩 + row group 按 symbol 排序   │
+└─────────────────────────┬───────────────────────────────┘
+                          ▼
+┌─────────────────────────────────────────────────────────┐
+│  L2 清洗层(DuckDB 持久库 + 视图)                       │
+│      dw.duckdb 文件:CREATE VIEW v_adj_close AS ...      │
+│      按需现算 qfq/hfq,避免存时变数据                    │
+└─────────────────────────┬───────────────────────────────┘
+                          ▼
+┌─────────────────────────────────────────────────────────┐
+│  L3 因子层(parquet + Polars lazy 扫描)                 │
+│      因子按 (date, factor_name) 分区                    │
+│      Polars scan_parquet + 谓词下推                      │
+└─────────────────────────┬───────────────────────────────┘
+                          ▼
+┌─────────────────────────────────────────────────────────┐
+│  L4 回测/实盘内存(Arrow / NumPy / Polars)              │
+│      全市场某天因子 → 组合权重 → 撮合                   │
+└─────────────────────────────────────────────────────────┘</code></pre>
+
+<h3>关键设计:parquet 分区策略</h3>
+
+<table>
+  <thead><tr><th>方案</th><th>问题</th><th>是否推荐</th></tr></thead>
+  <tbody>
+    <tr><td>按 <code>date=YYYY-MM-DD</code> 单层分区</td><td>—</td><td><strong>✅ 推荐</strong></td></tr>
+    <tr><td>按 <code>symbol=AAPL</code> 分区</td><td>5000 symbol = 5000 个小文件 = 小文件灾难</td><td>❌ 避免</td></tr>
+    <tr><td>按 <code>year=/month=/day=</code> 嵌套</td><td>分区过多,元数据开销大</td><td>❌ 避免</td></tr>
+    <tr><td>按 date + symbol bucket</td><td>平衡文件数与并行度(分钟级数据用)</td><td>✅ 分钟级推荐</td></tr>
+  </tbody>
+</table>
+
+<div class="callout warn">
+  <div class="label">⚠ 不要按 symbol 分区</div>
+  <p style="margin:0;">
+  5000 只 A 股 = 5000 个目录,每个目录一堆小 parquet。引擎扫描时元数据开销远超数据读取。<strong>正确:按 date 分区,row group 内按 symbol 排序</strong>(这样 parquet 的 row group 统计能对 symbol 做谓词下推)。
+  </p>
+</div>
+
+<!-- ====================================================== -->
+<h2 id="hands-on">5. 可运行实操:AKShare → parquet 流水线(20 分钟)</h2>
+
+<pre><code># pip install akshare polars duckdb exchange_calendars pyarrow
+import akshare as ak
+import polars as pl
+import exchange_calendars as xcals
+from pathlib import Path
+import time
+
+DATA_DIR = Path("./data/daily")
+
+def fetch_and_store(start="2019-01-01", end="2024-12-31"):
+    # 1. 拿交易日历(避开节假日 + 临时休市)
+    sse = xcals.get_calendar("XSHG")
+    trade_days = [d.strftime("%Y%m%d") for d in
+                  sse.sessions_in_range(start, end)]
+    print(f"共 {len(trade_days)} 个交易日")
+
+    # 2. 注意:这里用 stock_info_a_code_name 有存活偏差(见陷阱 2)
+    #    生产应维护含退市股的历史股票池
+    # 3. 按日期拉数据(不复权 + 复权因子分别存)
+    for date_str in trade_days[-5:]:                    # 演示只跑最后 5 天
+        try:
+            # 拉不复权日线(全市场某日)
+            df = ak.stock_zh_a_hist(
+                symbol="", period="daily",
+                start_date=date_str, end_date=date_str,
+                adjust=""    # 不复权
+            )
+            if df is None or len(df) == 0:
+                continue
+
+            # 转 Polars + 写分区 parquet
+            partition_dir = DATA_DIR / f"date={date_str[:4]}-{date_str[4:6]}-{date_str[6:]}"
+            partition_dir.mkdir(parents=True, exist_ok=True)
+
+            pl.from_pandas(df).write_parquet(
+                partition_dir / "data.parquet",
+                compression="zstd",
+                use_pyarrow_extension_array=True,
+            )
+            print(f"  ✅ {date_str}: {len(df)} 行")
+            time.sleep(1)    # 避免东财封 IP
+        except Exception as e:
+            print(f"  ❌ {date_str}: {e}")
+
+fetch_and_store()</code></pre>
+
+<h3>查询:Polars 谓词下推的正确姿势</h3>
+
+<pre><code>import polars as pl
+
+# ❌ 反模式:全量读再过滤(L10 已讲)
+# df = pl.read_parquet("data/daily/**/*.parquet").filter(...)
+
+# ✅ 正确:scan_parquet + 谓词下推
+lf = (
+    pl.scan_parquet("data/daily/**/*.parquet")
+      .filter(
+          (pl.col("日期") >= pl.date(2024, 1, 1)) &    # 时间过滤 → 分区裁剪
+          (pl.col("收盘") > 0)                          # 数据质量
+      )
+      .group_by("股票代码")
+      .agg(
+          pl.col("收盘").mean().alias("avg_close"),
+          pl.col("成交量").sum().alias("total_vol"),
+      )
+      .sort("total_vol", descending=True)
+)
+
+df = lf.collect()    # 触发执行
+print(df.head())</code></pre>
+
+<h3>查询:DuckDB SQL 直查 parquet</h3>
+
+<pre><code>import duckdb
+
+# DuckDB 原生支持 hive 分区,谓词自动下推
+result = duckdb.sql("""
+  SELECT 股票代码, AVG(收盘) AS avg_close, SUM(成交量) AS total_vol
+  FROM read_parquet('data/daily/**/*.parquet', hive_partitioning=1)
+  WHERE 日期 &gt;= DATE '2024-01-01'      -- 自动裁剪分区
+    AND 收盘 &gt; 0
+  GROUP BY 股票代码
+  ORDER BY total_vol DESC
+""").df()
+print(result.head())</code></pre>
+
+<div class="callout produce">
+  <div class="label">两者对比</div>
+  <p style="margin:0;">
+  Polars(代码思维,rolling/cross-sectional 因子计算更顺手)+ DuckDB(SQL 思维,ASOF JOIN、ad-hoc 探索更顺手)。<strong>两者都免费(MIT)、都有 Python 3.13 wheel、都能查 parquet</strong>。<strong>不需要二选一,可以并存</strong>。
+  </p>
+</div>
+
+<div class="exercise">
+  <h3>练习 9.1 · 画出你的数据层架构 <span class="badge">15 min</span></h3>
+  <p>新建 <code>learning-records/0009-data-layer.md</code>,按下面问题自检并填表:</p>
+  <pre><code># 数据层架构 v0.1
+
+## 我的场景
+- 频率:[日级 / 分钟级]
+- 市场范围:[A股全市场 / 沪深300 / 某行业]
+- 历史长度:[X 年]
+- 估算数据量:[Y GB]
+
+## 选型决策
+- 数据源:[AKShare + BaoStock 交叉校验]
+- 存储:[parquet 按 date 分区 + DuckDB 持久库]
+- 计算:[Polars 因子 / DuckDB 探索]
+- 是否需要 ClickHouse:[否,理由:无 tick + 单用户]
+
+## 四个陷阱防护检查
+- [ ] 用 hfq 或"不复权+因子",不跨日期拼接 qfq
+- [ ] 维护含退市股的历史股票池
+- [ ] 用 exchange_calendars 处理交易日
+- [ ] 除权除息日收益计算明确(不复权会有跳空)
+
+## 我的痛点(决定下一步升级)
+- [ ] 数据量到 100GB+ → 考虑 DuckDB 持久库 + 索引
+- [ ] 需要实时写入 → 考虑 ClickHouse 单机
+- [ ] 多人协作 → 嵌入式不够,要 server</code></pre>
+</div>
+
+<!-- ====================================================== -->
+<h2 id="selection">6. 引擎选型决策(10 分钟)</h2>
+
+<h3>三维度决策(精简版)</h3>
+
+<table>
+  <thead><tr><th>问题</th><th>答案 → 选</th></tr></thead>
+  <tbody>
+    <tr><td><strong>1. 频率?</strong></td><td>日级 → parquet+Polars/DuckDB(够用)<br>分钟级 → DuckDB 持久库 + 分区<br>tick 级 → ClickHouse / KDB+(本课 out of scope)</td></tr>
+    <tr><td><strong>2. 实时还是研究?</strong></td><td>仅研究 → 文件 + Polars/DuckDB<br>研究+实时 → ClickHouse 单机</td></tr>
+    <tr><td><strong>3. 预算+团队?</strong></td><td>无预算+Python → AKShare + parquet + Polars/DuckDB<br>有预算+能招人 → KDB+(tick 场景)</td></tr>
+  </tbody>
+</table>
+
+<h3>规模 → 推荐栈(2026-07)</h3>
+
+<table>
+  <thead><tr><th>规模</th><th>行数</th><th>parquet 大小</th><th>推荐</th></tr></thead>
+  <tbody>
+    <tr><td>日级,5年,5000股</td><td>~6M</td><td>~200MB</td><td>Pandas / Polars / DuckDB 都行</td></tr>
+    <tr><td>日级,10年,全市场</td><td>~12M</td><td>~400MB</td><td>Polars 或 DuckDB</td></tr>
+    <tr><td>分钟级,5年,5000股</td><td>~1.5B</td><td>~30–80GB</td><td><strong>DuckDB + 分区 parquet</strong>;Polars 按 batch</td></tr>
+    <tr><td>分钟级,10年+基本面</td><td>~3B+</td><td>~150GB+</td><td>DuckDB 或 ArcticDB</td></tr>
+    <tr><td>tick / L2</td><td>万亿</td><td>TB+</td><td><strong>ClickHouse</strong>(超散户范围)</td></tr>
+  </tbody>
+</table>
+
+<div class="callout warn">
+  <div class="label">⚠ ArcticDB 散户要不要上</div>
+  <p style="margin:0;">
+  ArcticDB(Man Group 开源)<strong>专为量化设计、版本化数据、Python 原生</strong>,听起来很美。但:<br>
+  ① 许可是 <strong>BSL 1.1</strong>(非纯 Apache,2 年后才转 Apache,有 Additional Use Grant);<br>
+  ② 自带存储格式(LMDB/S3),<strong>不是 parquet 替代</strong>,引入运维复杂度;<br>
+  ③ 散户规模(DuckDB 完全能 hold)用 ArcticDB 是<strong>过度工程</strong>。<br>
+  <strong>什么时候考虑:分钟级 10 年+、需要符号中心 key-value 访问、要版本化因子</strong>。
+  </p>
+</div>
+
+<div class="quiz" data-correct="b">
+  <div class="q">散户量化,5000 股 × 5 年分钟级数据(~1.5B 行,~50GB),单机 16GB 内存。推荐栈?</div>
+  <ul>
+    <li data-k="a">纯 Pandas(够熟,内存够)</li>
+    <li data-k="b">DuckDB + 按 date 分区 parquet</li>
+    <li data-k="c">KDB+(行业标准)</li>
+    <li data-k="d">SQLite(轻量)</li>
+  </ul>
+  <div class="reveal">
+  <strong>答案:B</strong>。1.5B 行 ~50GB,DuckDB 设计就是<strong>为大于内存的 OLAP</strong>:按 date 分区后,每次扫描一个分区(~1.2M 行)远小于内存,谓词下推 + 列裁剪让扫描高效。<strong>16GB 内存足够</strong>(分区是关键)。A(Pandas)单线程 + eager + 全量加载,50GB 直接 OOM;C(KDB+)tick 场景才值,分钟级杀鸡用牛刀 + 商业授权贵;D(SQLite)行存 + 无并行,分析慢。
+  </div>
+</div>
+
+<div class="quiz" data-correct="c">
+  <div class="q">AKShare 拉某股 5 年历史 qfq 价格做回测,最稳妥的做法是?</div>
+  <ul>
+    <li data-k="a">每次回测都现拉,保证最新</li>
+    <li data-k="b">拉一次存下来,永久不变</li>
+    <li data-k="c">存不复权+复权因子,回测时现算 hfq</li>
+    <li data-k="d">存 qfq,每周全量刷新</li>
+  </ul>
+  <div class="reveal">
+  <strong>答案:C</strong>。<strong>存"不复权 + 复权因子"是最稳健方案</strong>:不复权价格永不变,复权因子分红时更新,回测时按需算 hfq(后复权,锚定 IPO 日,历史稳定)。A 慢且每次结果可能变(qfq 时变性);B 错(qfq 会随分红变);D 浪费且仍有时变性。这是可复现回测的工程基础。
+  </div>
+</div>
+
+<!-- ====================================================== -->
+<hr class="sep">
+
+<h2 id="recap">本课要点回顾</h2>
+
+<ol>
+  <li><strong>量化和普通 OLAP 不同</strong>:主轴是 symbol×timestamp,写少读多,因子列爆炸。</li>
+  <li><strong>A股数据首选 AKShare(MIT,免费)</strong>;Tushare Pro 非商业许可,商业慎用。</li>
+  <li><strong>四个数据陷阱</strong>:qfq 时变性 / 存活偏差 / 节假日 / 除权除息。<strong>必须防护,否则回测失真</strong>。</li>
+  <li><strong>parquet 按 date 单层分区</strong>,row group 按 symbol 排序;不要按 symbol 分区(5000 小文件灾难)。</li>
+  <li><strong>Polars(代码)+ DuckDB(SQL)并存</strong>:两者都 MIT、都有 3.13 wheel、都查 parquet,不需要二选一。</li>
+  <li><strong>规模 → 引擎</strong>:日级 → 文件够;分钟级 5 年 → DuckDB + 分区;分钟级 10 年+ → ArcticDB;tick → ClickHouse。</li>
+  <li><strong>散户不要上 ClickHouse/ArcticDB</strong>:无 tick + 单用户场景,嵌入式方案是降维优势(零运维)。</li>
+</ol>
+
+<h2 id="primary-source">推荐一手阅读</h2>
+
+<p>
+<strong>本课主源 1</strong>:<a href="https://akshare.akfamily.xyz/" target="_blank" rel="noopener">AKShare 官方文档</a>。所有接口、数据源、变更记录的权威来源。
+</p>
+
+<p>
+<strong>本课主源 2</strong>:<a href="https://duckdb.org/docs/lts/data/parquet/overview.html" target="_blank" rel="noopener">DuckDB Parquet 文档</a>。谓词下推、分区裁剪、hive 分区的机制细节。
+</p>
+
+<p>
+<strong>数据陷阱深读</strong>:<a href="https://github.com/man-group/ArcticDB" target="_blank" rel="noopener">ArcticDB README</a>(理解版本化数据为什么对量化重要)+ <a href="https://pola.rs/posts/predicate-pushdown-query-optimizer/" target="_blank" rel="noopener">Polars 谓词下推博客</a>。
+</p>
+
+<h2 id="next">本课与课程体系的关系</h2>
+
+<ul>
+  <li><strong>Q·01-08 数学基础</strong>:本课让那些数学有"数据"可跑(不再只用模拟数据)。</li>
+  <li><strong>数据治理 L09 分层 + L10 引擎选型</strong>:本课是这些框架在量化场景的<strong>特化应用</strong>。</li>
+  <li><strong>数据治理 L05 数据质量</strong>:四个数据陷阱就是量化场景的 DQ 规则来源。</li>
+</ul>
+
+<div class="ask-teacher">
+<strong>有疑问就问老师(我)</strong>。卡点比如:你的具体频率/规模选哪个引擎、AKShare 拉数据报错(贴错误)、Polars vs DuckDB 拿不定、不知道因子怎么分区、存活偏差不知怎么补退市股。贴你的场景,我帮你定方案。
+</div>
+
+</main>
+
+<footer class="lesson">
+  <div>
+    <a href="../../index.html">总览</a> ·
+    <a href="0008-black-scholes-ito.html">← Q·08</a> ·
+    <span style="color:#888;">Q·09 数据层</span>
+  </div>
+  <div>Lesson 09 · Quant Data Layer (A-Share Retail)</div>
+</footer>
+
+</body>
+</html>
