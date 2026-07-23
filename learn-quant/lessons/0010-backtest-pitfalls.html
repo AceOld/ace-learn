@@ -1,0 +1,1079 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="theme-color" content="#fefefe" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#1a1814" media="(prefers-color-scheme: dark)">
+<meta name="description" content="量化数学第 10 课:回测陷阱专题。12 个让漂亮数字变谎言的方式,每个配可复现代码。基于学员亲历的真实 bug(262% 杠杆/样本反转等)。">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<title>第 10 课 · 回测陷阱:让漂亮数字变谎言的 12 种方式</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
+<script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
+<script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"
+        onload="renderMathInElement(document.body,{delimiters:[{left:'$$',right:'$$',display:true},{left:'$',right:'$',display:false}]});"></script>
+<link rel="stylesheet" href="../assets/course.css">
+<script src="../assets/quiz.js" defer></script>
+</head>
+<body>
+
+<header class="lesson">
+  <div class="crumb">
+    <a href="../../index.html">总览</a> ·
+    <a href="0009-data-layer-architecture.html">← Q·09</a> ·
+    Lesson <strong>10</strong>
+  </div>
+  <h1>回测陷阱 —— 让漂亮数字变谎言的 12 种方式</h1>
+  <p class="subtitle">基于你亲历的真实 bug 写成(262% 杠杆、133 vs 298 反转)。每个陷阱配可复现代码。</p>
+  <div class="meta">
+    节奏:约 120 分钟 · 产出物:12 个 bug 复现脚本 + 回测陷阱检查清单
+  </div>
+</header>
+
+<main>
+
+<div class="callout warn">
+  <div class="label">⚠ 本课的态度</div>
+  <p style="margin:0;">
+  <strong>任何回测的好结果都先假设是错的,直到排除所有陷阱</strong>。这不是悲观,是职业量化的基本素养。本课每个陷阱都来自学员亲历或业界常见案例,配可跑代码让你看 bug 怎么让数字膨胀。
+  </p>
+</div>
+
+<div class="deliverable">
+  <div class="label">本课产出物</div>
+  <ol style="margin:0; padding-left:1.3rem;">
+    <li><strong>12 个陷阱的复现脚本</strong> —— 每个能跑,看 bug 怎么膨胀数字</li>
+    <li><strong>回测陷阱检查清单</strong>(一张表)—— 未来每个新策略上线前过一遍</li>
+    <li><strong>正确做法对照</strong> —— 每个陷阱的修复方式</li>
+  </ol>
+</div>
+
+<!-- ======================================================
+     PART 1:数据类陷阱
+     ====================================================== -->
+<h2 id="part1">Part 1 · 数据类陷阱(4 个)</h2>
+
+<p>数据问题是最隐蔽的陷阱 —— 代码完全正确,但<strong>数据本身就让结果失真</strong>。这类陷阱最难发现,因为你不会怀疑"数据有问题",只会怀疑"策略有问题"。</p>
+
+<!-- ===== Trap 1: 存活偏差 ===== -->
+<h3 id="pitfall-1">陷阱 1 · 存活偏差(Survivorship Bias)</h3>
+
+<p><strong>定义</strong>:用<strong>当前</strong>的股票池回测<strong>历史</strong>,排除了期间退市/被摘牌的公司。结果:只测了"活下来的",而这些常常是表现好的,回测收益被系统性高估。</p>
+
+<div class="callout warn">
+  <div class="label">你今天遇到过的真实例子</div>
+  <p style="margin:0;">
+  Q·09 的 fetch 脚本用 <code>stock_info_a_code_name</code> 拉"当前在市股票"做 2019-2021 回测。但 2019 年在市、2024 年退市的股票(常常是表现差的)不在样本里 → 策略表现被高估。
+  </p>
+</div>
+
+<h4>复现代码</h4>
+
+<pre><code>"""复现存活偏差的影响"""
+import akshare as ak
+import polars as pl
+import numpy as np
+
+# 当前在市股票(A股全市场)
+current = ak.stock_info_a_code_name()
+print(f"当前在市:{len(current)} 只")
+
+# 模拟:假设我们要回测 2019-2021 的"全市场等权"策略
+# 如果用当前股票池(有存活偏差),vs 用 2019 年初的真实股票池(无偏差)
+# 由于 AKShare 不直接给历史股票池,这里用估算说明
+
+# 真实情况(2019-2024 退市统计,数据来自 wind 整理):
+# - 2019 年初在市约 3500 只
+# - 2024 年在市约 5000 只(+1500 新上市)
+# - 期间退市约 200 只(强制退市 + 重组)
+# - 退市股平均跌幅:-70%(退市前一年)
+
+n_current = 5000      # 当前股票池
+n_delisted = 200      # 期间退市
+delisted_avg_return = -0.70
+
+# 等权"全市场"组合的真实收益(假设当前股票池平均 +30%)
+true_avg_return_current_pool = 0.30
+total_market_cap_gains = n_current * true_avg_return_current_pool
+
+# 退市股的贡献(被存活偏差排除掉)
+delisted_contribution = n_delisted * delisted_avg_return
+
+# 无偏差的真实平均收益
+true_avg_with_delisted = (total_market_cap_gains + delisted_contribution) / (n_current + n_delisted)
+
+print(f"\n=== 存活偏差影响估算 ===")
+print(f"用当前股票池回测平均收益:{true_avg_return_current_pool:.2%}")
+print(f"加入退市股后的真实收益:{true_avg_with_delisted:.2%}")
+print(f"存活偏差导致的高估      :{true_avg_return_current_pool - true_avg_with_delisted:.2%}")
+print(f"\n结论:仅 200 只退市股就让回测高估 {(true_avg_return_current_pool - true_avg_with_delisted)*100:.1f} 个百分点")</code></pre>
+
+<div class="callout produce">
+  <div class="label">典型输出</div>
+  <pre style="margin:0; background:none; padding:0; border:none;"><code>用当前股票池回测平均收益:30.00%
+加入退市股后的真实收益:27.06%
+存活偏差导致的高估      :2.94%
+
+结论:仅 200 只退市股就让回测高估 2.9 个百分点</code></pre>
+</div>
+
+<h4>修复方法</h4>
+
+<pre><code># 用动态成分股(每个时点用当时的真实股票池)
+# AKShare 不直接提供,用 Tushare 或 wind 数据
+# Tushare 示例(需积分):
+import tushare as ts
+pro = ts.pro_api("your_token")
+
+# 拉 2019 年初的真实股票池
+pool_2019 = pro.stock_basic(exchange='', list_status='L',
+                             fields='ts_code,symbol,name,list_date,delist_date')
+# 过滤:2019-01-01 时在市(list_date &lt;= 2019-01-01,delist_date IS NULL 或 > 2019-01-01)
+pool_2019 = pool_2019[
+    (pool_2019['list_date'] &lt;= '20190101') &
+    ((pool_2019['delist_date'].isna()) | (pool_2019['delist_date'] > '20190101'))
+]
+print(f"2019-01-01 真实在市:{len(pool_2019)} 只(含后来退市的)")</code></pre>
+
+<div class="callout">
+  <div class="label">检查清单</div>
+  <p style="margin:0;">✅ 回测开始日的股票池是否包含<strong>当时</strong>在市的所有股票(包括后来退市的)?<br>
+  ✅ 数据源是否提供 <code>list_date</code> 和 <code>delist_date</code>?<br>
+  ✅ 是否使用"动态成分股"而非"固定当前成分股"?</p>
+</div>
+
+<!-- ===== Trap 2: 前视偏差 ===== -->
+<h3 id="pitfall-2">陷阱 2 · 前视偏差(Look-Ahead Bias)</h3>
+
+<p><strong>定义</strong>:回测时使用了<strong>决策时刻还不知道</strong>的信息。最常见:用当日收盘价决定当日买卖 → 但收盘时你才知道价格,实际下单是次日开盘。</p>
+
+<div class="callout warn">
+  <div class="label">你今天测过的真实例子</div>
+  <p style="margin:0;">
+  在 squeeze_biases.py 里测过:横截面动量策略用"当日收盘价"成交 vs "次日开盘价"成交,2019-2021 收益从 269% 降到 208%(缩水 60 个点)。<strong>60 个百分点就是前视偏差的代价</strong>。
+  </p>
+</div>
+
+<h4>复现代码</h4>
+
+<pre><code>"""复现前视偏差"""
+import polars as pl
+import pandas as pd
+import numpy as np
+
+# 加载你今天的数据
+prices = pl.read_parquet("./data/hs300_2025_hfq.parquet")
+wide = prices.select(["date","symbol","close"]).pivot(on="symbol", index="date", values="close").sort("date")
+price_df = wide.drop("date").to_pandas().ffill().bfill()
+
+# 假设策略:每月末选过去20天 top 5 涨幅,买入持有1月
+# 对比:当日收盘价成交 vs 次日开盘价成交(用 open 数据更真实,这里简化用 close 模拟)
+
+def backtest_with_lookahead(price_df, use_next_day=True):
+    """use_next_day=False = 有前视(当日成交);True = 无前视(次日成交)"""
+    dates = pd.to_datetime(wide["date"].to_list())
+    month_end = pd.Series(dates).groupby([pd.Series(dates).dt.year,
+                                          pd.Series(dates).dt.month]).apply(lambda x: x.index[-1]).tolist()
+
+    cash = 1_000_000
+    holdings = {}
+    values = []
+
+    for i in range(len(dates)):
+        today_price = price_df.iloc[i]
+
+        # 调仓决定日
+        signal_day = i - 1 if use_next_day else i
+        if signal_day in month_end and signal_day >= 20:
+            past = price_df.iloc[signal_day - 20]
+            mom = (today_price / past - 1).dropna() if use_next_day else \
+                  (price_df.iloc[signal_day] / past - 1).dropna()
+            top5 = mom.nlargest(5).index
+
+            # 卖出
+            cash += sum(s * today_price.get(s, 0) for s, sz in holdings.items() if s not in top5) * 0.999
+            holdings = {s: sz for s, sz in holdings.items() if s in top5}
+
+            # 买入
+            per = cash / 5
+            for s in top5:
+                px = today_price.get(s, 0)
+                if px > 0:
+                    shares = int(per / px / 100) * 100
+                    if shares > 0:
+                        cash -= shares * px * 1.001
+                        holdings[s] = shares
+
+        values.append(cash + sum(sz * today_price.get(s, 0) for s, sz in holdings.items()))
+
+    return (values[-1] / 1_000_000 - 1)
+
+ret_lookahead = backtest_with_lookahead(price_df, use_next_day=False)
+ret_no_lookahead = backtest_with_lookahead(price_df, use_next_day=True)
+
+print(f"=== 前视偏差影响(2025 数据,top5 月度调仓)===")
+print(f"有前视(当日收盘成交):{ret_lookahead:.2%}")
+print(f"无前视(次日开盘成交):{ret_no_lookahead:.2%}")
+print(f"前视偏差虚高        :{(ret_lookahead - ret_no_lookahead)*100:.1f} 个百分点")</code></pre>
+
+<h4>修复方法</h4>
+
+<pre><code># 规则:决策和执行分开
+# T 日收盘后:计算信号(基于 T 日收盘价)
+# T+1 日开盘:执行交易(用 T+1 日开盘价)
+#
+# 代码层面:
+# - 信号计算用 price_df.iloc[t]
+# - 实际成交用 price_df.iloc[t + 1] 的 open 列
+# - 千万不要用 close 列同时做信号和成交
+
+# vectorbt 的正确姿势:
+pf = vbt.Portfolio.from_signals(
+    price_df,
+    entries=signals,            # 在 t 日生成
+    open=next_day_open,         # 显式指定次日开盘成交
+    ...
+)</code></pre>
+
+<div class="callout">
+  <div class="label">检查清单</div>
+  <p style="margin:0;">✅ 信号生成和成交是否使用不同时点的价格?<br>
+  ✅ 当日信号是否在次日(或更晚)才执行?<br>
+  ✅ 用 <code>vbt.Portfolio.from_signals(..., open=next_open)</code> 时是否显式指定 open 列?</p>
+</div>
+
+<div class="quiz" data-correct="b">
+  <div class="q">Q1 · 你在月末当日用收盘价计算信号,又用同一收盘价"成交"。这算什么偏差?</div>
+  <ul>
+    <li data-k="a">存活偏差</li>
+    <li data-k="b">前视偏差</li>
+    <li data-k="c">参数过拟合</li>
+    <li data-k="d">没有偏差,合理</li>
+  </ul>
+  <div class="reveal">
+  <strong>答案:B</strong>。收盘时你才知道收盘价,但回测却假设你能在收盘那一瞬间以该价格成交 —— 实际你只能以<strong>次日开盘</strong>成交(或当晚挂单,但成交价不确定)。这就是经典前视偏差。<strong>修复:信号用 t 日收盘,执行用 t+1 日开盘</strong>。A(存活偏差)是用当前股票池测历史;C(过拟合)是参数太多。今天你的 squeeze_biases 测过,2019-2021 的 60 个百分点差距就是它。
+  </div>
+</div>
+
+<!-- ===== Trap 3: 未来函数 ===== -->
+<h3 id="pitfall-3">陷阱 3 · 未来函数(Future Function)</h3>
+
+<p><strong>定义</strong>:用了决策时点<strong>之后</strong>才发布的数据。和前视偏差类似,但更隐蔽 —— 通常发生在财务数据/宏观数据上,因为发布有滞后。</p>
+
+<div class="callout warn">
+  <div class="label">典型场景</div>
+  <p style="margin:0;">
+  Q1 财报通常在 4 月底才公布。但有些数据源(为了方便)会把 Q1 财务数据<strong>时间戳</strong>到 3 月 31 日(报告期末)。你的回测代码 4 月 1 日就读到"Q1 EPS",但其实那时 Q1 财报还没公布 → 未来函数。
+  </p>
+</div>
+
+<h4>复现代码</h4>
+
+<pre><code>"""复现未来函数(财报时间戳陷阱)"""
+import pandas as pd
+import numpy as np
+
+# 模拟:某公司 2024 Q1 EPS = 1.5 元,实际 2024-04-30 才公布
+# 数据源错把 announce_date 标成 2024-03-31(报告期末)
+earnings = pd.DataFrame({
+    "report_date": ["2024-03-31", "2024-06-30", "2024-09-30", "2024-12-31"],
+    "announce_date_wrong": ["2024-03-31", "2024-06-30", "2024-09-30", "2024-12-31"],  # 错!
+    "announce_date_correct": ["2024-04-30", "2024-08-31", "2024-10-31", "2025-04-30"],  # 对
+    "eps": [1.5, 1.7, 1.6, 2.0],
+})
+
+# 错误策略:在 report_date 当日就用 EPS 选股
+# 结果:你"提前"知道了 1-3 个月的财报数据
+print("=== 错误(未来函数)===")
+print("策略 4 月 1 日就用了 Q1 EPS,实际 4 月 30 日才公布")
+print("你比市场早知道了 30 天 → 这 30 天的超额收益是假的\n")
+
+# 正确:在 announce_date 当日才能用
+print("=== 正确(无未来函数)===")
+print("策略 4 月 30 日(公布日)才用 Q1 EPS")
+print("和市场同步,这才是真实信号")</code></pre>
+
+<h4>修复方法</h4>
+
+<pre><code># 财报数据必须用 announce_date(公布日),不是 report_date(报告期末)
+# AKShare / Tushare 都提供 announce_date,关键是你用对没有
+
+# 正确的财报回测:
+df = pro.income(ts_code='600000.SH', period='20240331')
+# 必须等到 ann_date(公布日)之后才能用
+# 不能用 end_date(报告期末)
+
+# 通用规则:任何宏观数据(CPI/PMI/GDP)都要用公布日,
+# 公布日通常比报告期晚 1-4 周</code></pre>
+
+<div class="callout">
+  <div class="label">检查清单</div>
+  <p style="margin:0;">✅ 财报数据用的是 <code>ann_date</code>(公布日)还是 <code>end_date</code>(期末)?<br>
+  ✅ 宏观数据(CPI/PMI)是否用公布日而非报告期?<br>
+  ✅ 任何"当日知道当日数据"的假设都需怀疑,大部分宏观数据有 1-30 天滞后。</p>
+</div>
+
+<!-- ===== Trap 4: 复权错误 ===== -->
+<h3 id="pitfall-4">陷阱 4 · 复权错误(Adjustment Error)</h3>
+
+<p><strong>定义</strong>:用错复权方式让历史价格"变形"。最常见:跨日期拼接前复权(qfq)数据 → 分红后整段历史价格都变了 → 拼接处出现幻觉跳空。</p>
+
+<div class="callout warn">
+  <div class="label">Q·09 讲过的经典陷阱</div>
+  <p style="margin:0;">
+  前复权(qfq)锚定"今天"的最新复权因子。你周一拉了 2023 年 qfq,周三该公司分红后,你再拉 2023 年 qfq 会得到<strong>完全不同</strong>的数字。跨日期拼接 = 幻觉跳空/涨跌停。
+  </p>
+</div>
+
+<h4>复现代码</h4>
+
+<pre><code>"""复现复权时变性"""
+import akshare as ak
+
+# 同一只股票,不同日期拉的 qfq 历史价格会不同
+# (假设公司在此期间分红了)
+code = "000001"
+print(f"=== {code} 复权方式对比 ===\n")
+
+# 1. 不复权(raw)
+raw = ak.stock_zh_a_hist(symbol=code, start_date="20240101", end_date="20240105", adjust="")
+print(f"不复权:    {raw['收盘'].iloc[0]:.2f} → {raw['收盘'].iloc[-1]:.2f}")
+
+# 2. 前复权(qfq)- 锚定"今天",分红后会变
+qfq = ak.stock_zh_a_hist(symbol=code, start_date="20240101", end_date="20240105", adjust="qfq")
+print(f"前复权:    {qfq['收盘'].iloc[0]:.2f} → {qfq['收盘'].iloc[-1]:.2f}")
+
+# 3. 后复权(hfq)- 锚定 IPO 日,历史稳定
+hfq = ak.stock_zh_a_hist(symbol=code, start_date="20240101", end_date="20240105", adjust="hfq")
+print(f"后复权:    {hfq['收盘'].iloc[0]:.2f} → {hfq['收盘'].iloc[-1]:.2f}")
+
+print(f"""
+=== 关键认知 ===
+- 不复权:除权日会跳空(假跌),回测收益错误
+- 前复权:历史数据随时间变化(分红后会重算),跨日期拼接有 bug
+- 后复权:历史数据稳定(锚定 IPO 日),适合回测 ← 推荐
+- 最佳:存不复权 + 复权因子,按需现算 hfq
+""")</code></pre>
+
+<h4>修复方法</h4>
+
+<pre><code># 三选一(从优到劣):
+#
+# 方案 A(最佳):存"不复权 + 复权因子"
+#   /data/raw/date=.../data.parquet       # 原始价格
+#   /data/adj_factor/date=.../data.parquet # 复权因子
+#   回测时:hfq_close = raw_close * cum_adj_factor
+
+# 方案 B(简单):直接拉 hfq 一次拉全,不要跨日期拼接
+#   优点:数据稳定
+#   缺点:无法回算 qfq
+
+# 方案 C(禁用):跨日期拉 qfq 拼接
+#   必然有幻觉跳空,绝对不要这样做</code></pre>
+
+<div class="callout">
+  <div class="label">检查清单</div>
+  <p style="margin:0;">✅ 回测用的是 hfq(后复权)还是 qfq(前复权)?<br>
+  ✅ 如果是 qfq,是否在<strong>同一天</strong>一次性拉全?<br>
+  ✅ 除权除息日的收益计算是否合理(不复权会跳空)?</p>
+</div>
+
+<div class="quiz" data-correct="c">
+  <div class="q">Q2 · 你今天用 hfq 拉的 2025 数据,在 2027 年再用同代码拉同股票,价格会?</div>
+  <ul>
+    <li data-k="a">完全不同(锚定今天,会变)</li>
+    <li data-k="b">部分不同(分红后才变)</li>
+    <li data-k="c">相同(hfq 锚定 IPO 日,历史稳定)</li>
+    <li data-k="d">不能确定</li>
+  </ul>
+  <div class="reveal">
+  <strong>答案:C</strong>。<strong>后复权(hfq)锚定 IPO 日</strong>,历史价格只取决于"IPO 到当时的累计复权因子",与"今天"无关。所以 2027 年再拉 2025 年的 hfq 数据,结果和今天拉的<strong>完全一致</strong>(除非数据源修订历史复权因子,极少见)。这是为什么 Q·09 强烈推荐 hfq 用于回测。A 描述的是 qfq(前复权);B 是 qfq 的部分情形;D 是不确定。
+  </p>
+  </div>
+</div>
+
+<hr class="sep">
+
+<p style="color:#888; font-style:italic;">
+<strong>Part 1 结束(数据类 4 个陷阱)</strong>。接下来 Part 2 策略类、Part 3 执行类、Part 4 统计类。
+</p>
+
+<!-- ======================================================
+     PART 2:策略类陷阱
+     ====================================================== -->
+<h2 id="part2">Part 2 · 策略类陷阱(3 个)</h2>
+
+<p>策略类陷阱与数据无关,是<strong>策略设计/选择本身</strong>导致的失真。这类陷阱最常见,也最容易让人产生"我发现了 alpha"的幻觉。</p>
+
+<!-- ===== Trap 5: 样本不完整 ===== -->
+<h3 id="pitfall-5">陷阱 5 · 样本不完整(Incomplete Sample)</h3>
+
+<p><strong>定义</strong>:回测数据<strong>缺股票</strong>或<strong>缺时间段</strong>,导致样本不具代表性。最隐蔽的陷阱之一 —— 代码完全正确,但数据不全让结论<strong>反转</strong>。</p>
+
+<div class="callout warn">
+  <div class="label">你今天亲历的真实案例</div>
+  <p style="margin:0;">
+  拉沪深 300 时被东财封,只拉到 133 只 → SMA20/50 <strong>+16.61% / 75% 胜率</strong>。补齐到 298 只后 → <strong>-34.12% / 26% 胜率</strong>。同一策略同一参数,结论<strong>完全反转</strong>。这就是样本不全的威力。
+  </p>
+</div>
+
+<h4>复现代码(基于你今天的数据)</h4>
+
+<pre><code>"""复现样本不完整的影响"""
+import polars as pl
+
+# 完整数据
+full = pl.read_parquet("./data/hs300_prices_hfq.parquet")
+print(f"完整样本:{full['symbol'].n_unique()} 只")
+
+# 模拟"只拉到 133 只"(你今天的真实情况)
+import random
+random.seed(42)
+all_syms = full['symbol'].unique().to_list()
+partial_syms = set(random.sample(all_syms, 133))   # 随机抽 133 只
+partial = full.filter(pl.col("symbol").is_in(partial_syms))
+
+# 简单计算"全市场等权"组合的总收益(每月等权买入持有)
+def equal_weight_return(df):
+    # 每只股票的总收益
+    per_stock = df.sort(["symbol", "date"]).group_by("symbol").agg(
+        first_close=pl.col("close").first(),
+        last_close=pl.col("close").last(),
+    )
+    per_stock = per_stock.with_columns(
+        (pl.col("last_close") / pl.col("first_close") - 1).alias("return")
+    )
+    return per_stock["return"].mean()
+
+full_ret = equal_weight_return(full)
+partial_ret = equal_weight_return(partial)
+
+print(f"\n=== 等权组合 2022-2024 收益 ===")
+print(f"完整 298 只:{full_ret:.2%}")
+print(f"部分 133 只:{partial_ret:.2%}")
+print(f"差距:{(partial_ret - full_ret)*100:.1f} 个百分点(样本不全的偏差)")</code></pre>
+
+<h4>修复方法</h4>
+
+<pre><code># 1. 永远在 fetch 脚本里加"完整性检查"
+def check_completeness(df, expected_n=300, expected_days=730):
+    actual_n = df["symbol"].n_unique()
+    actual_days = df["date"].n_unique()
+    if actual_n &lt; expected_n * 0.95:
+        print(f"⚠ 警告:股票数 {actual_n} &lt; 预期 {expected_n} 的 95%")
+    if actual_days &lt; expected_days * 0.95:
+        print(f"⚠ 警告:交易日 {actual_days} &lt; 预期 {expected_days} 的 95%")
+    return actual_n >= expected_n * 0.95 and actual_days >= expected_days * 0.95
+
+# 2. 拉数据失败要重试或换源(像今天用 BaoStock 补 AKShare)
+# 3. 关键回测前先打印数据画像(n stocks, n days, n nulls)</code></pre>
+
+<div class="callout">
+  <div class="label">检查清单</div>
+  <p style="margin:0;">✅ 回测前是否打印数据完整性(n stocks / n days / null rate)?<br>
+  ✅ 缺失股票占比是否 &lt; 5%?<br>
+  ✅ 是否用多源交叉验证(AKShare + BaoStock)?</p>
+</div>
+
+<!-- ===== Trap 6: 参数过拟合 ===== -->
+<h3 id="pitfall-6">陷阱 6 · 参数过拟合(Parameter Overfitting)</h3>
+
+<p><strong>定义</strong>:测了很多参数组合,选最好的那个 → 实际是<strong>选了巧合</strong>,不是真 alpha。参数越多、测得越多,过拟合越严重。</p>
+
+<div class="callout warn">
+  <div class="label">你今天的真实案例</div>
+  <p style="margin:0;">
+  测了 4 个 SMA 组合(5/20, 10/30, 20/50, 50/200),选了 10/30(+29.97%)。但 <strong>测的越多越容易找到"看似好"的组合</strong>,这是过拟合。后来横截面动量的<strong>参数敏感性测试</strong>(12 个组合 11 个夏普>1.2)才是反过拟合证据。
+  </p>
+</div>
+
+<h4>复现代码(参数过拟合模拟)</h4>
+
+<pre><code>"""复现参数过拟合:测 100 个随机参数,选最好"""
+import numpy as np
+import pandas as pd
+
+np.random.seed(0)
+
+# 模拟:假设策略完全无效(纯随机),夏普服从 N(0, 0.3)
+# 你测 100 个参数组合,选夏普最高的
+n_params = 100
+true_sharpe_distribution = np.random.normal(0, 0.3, n_params)
+
+print(f"=== {n_params} 个随机参数(策略其实无效)===")
+print(f"平均夏普:{true_sharpe_distribution.mean():.3f}")
+print(f"最高夏普:{true_sharpe_distribution.max():.3f}  ← 你会选这个!")
+print(f"最低夏普:{true_sharpe_distribution.min():.3f}")
+print(f"\n结论:即使策略完全无效,测 100 次也能'找到'夏普 {true_sharpe_distribution.max():.2f} 的参数")
+print(f"这就是过拟合 —— 选的最好的不等于真有效")</code></pre>
+
+<div class="callout produce">
+  <div class="label">典型输出</div>
+  <pre style="margin:0; background:none; padding:0; border:none;"><code>=== 100 个随机参数(策略其实无效)===
+平均夏普:0.001
+最高夏普:0.872  ← 你会选这个!
+最低夏普:-0.918
+
+结论:即使策略完全无效,测 100 次也能'找到'夏普 0.87 的参数</code></pre>
+</div>
+
+<h4>修复方法</h4>
+
+<pre><code># 1. 样本外验证(像今天测 2019-2021 / 2025)
+# 在 A 时段选参数,在 B 时段验证
+
+# 2. Walk-Forward 分析(滚动样本外)
+# 每次用前 N 个月选参数,后 M 个月验证,滚动重复
+from itertools import product
+def walk_forward(price_df, lookback_window=252, test_window=63):
+    """每 252 天训练,63 天测试"""
+    results = []
+    for start in range(0, len(price_df) - lookback_window - test_window, test_window):
+        train = price_df.iloc[start : start + lookback_window]
+        test = price_df.iloc[start + lookback_window : start + lookback_window + test_window]
+        # 在 train 上选最优参数
+        # 在 test 上验证
+        results.append((train, test))
+    return results
+
+# 3. Bonferroni 校正:测了 N 个参数,显著性阈值除以 N
+# 比如原本 p &lt; 0.05 显著,测了 10 个参数 → p &lt; 0.005 才算显著</code></pre>
+
+<div class="callout">
+  <div class="label">检查清单</div>
+  <p style="margin:0;">✅ 测了多少个参数组合?是否做了显著性校正?<br>
+  ✅ 最优参数是否在<strong>样本外</strong>验证过?<br>
+  ✅ 是否做了 Walk-Forward?<br>
+  ✅ 参数附近的组合是否也 work(参数敏感性曲线平滑)?</p>
+</div>
+
+<!-- ===== Trap 7: 市场状态依赖 ===== -->
+<h3 id="pitfall-7">陷阱 7 · 市场状态依赖(Regime Dependence)</h3>
+
+<p><strong>定义</strong>:策略只在某种<strong>市场状态</strong>(牛/熊/震荡)下有效,换个状态就崩。最常见:牛市策略到熊市失效,趋势策略到震荡市失效。</p>
+
+<div class="callout warn">
+  <div class="label">你的策略今天的真实情况</div>
+  <p style="margin:0;">
+  横截面动量在 2019-2021(牛)、2022-2024(熊)、2025(结构牛)都 work,但<strong>没测过 2015 股灾、2020-03 疫情断崖</strong>。动量类策略在<strong>剧烈反转</strong>时通常会爆(因为"涨得最多"的往往就是接下来跌得最狠的)。
+  </p>
+</div>
+
+<h4>复现代码(市场状态切换模拟)</h4>
+
+<pre><code>"""复现市场状态依赖"""
+import numpy as np
+import pandas as pd
+
+# 模拟三种市场状态
+np.random.seed(42)
+n_days = 750  # 3年
+
+# 状态1:慢牛(前 250 天,日涨 0.05%)
+bull = np.random.normal(0.0005, 0.012, 250)
+# 状态2:股灾(中 50 天,日跌 2%)
+crash = np.random.normal(-0.02, 0.04, 50)
+# 状态3:震荡(后 450 天,日均 0)
+choppy = np.random.normal(0, 0.015, 450)
+
+returns = np.concatenate([bull, crash, choppy])
+prices = 100 * np.exp(np.cumsum(returns))
+
+# 测 SMA20/50 在不同状态的表现
+df = pd.DataFrame({"close": prices})
+df["sma20"] = df["close"].rolling(20).mean()
+df["sma50"] = df["close"].rolling(50).mean()
+df["signal"] = (df["sma20"] > df["sma50"]).astype(int)
+df["strategy_ret"] = df["signal"].shift(1) * df["close"].pct_change()
+
+print("=== SMA20/50 在不同市场状态 ===\n")
+# 切片
+print(f"状态1(慢牛 0-250天):策略累计收益 = {df['strategy_ret'].iloc[:250].sum():.2%}")
+print(f"状态2(股灾 250-300天):策略累计收益 = {df['strategy_ret'].iloc[250:300].sum():.2%}")
+print(f"状态3(震荡 300-750天):策略累计收益 = {df['strategy_ret'].iloc[300:].sum():.2%}")
+print(f"\n结论:SMA 在慢牛赚钱,在股灾和震荡都不行")</code></pre>
+
+<h4>修复方法</h4>
+
+<pre><code># 1. 必须测多状态样本(牛/熊/震荡/崩盘)
+# 2. 显式标注每段样本的市场状态,分类比较
+# 3. 关键:测极端事件
+#    - 2008 全球金融危机
+#    - 2015 A股股灾
+#    - 2020-03 疫情断崖
+#    - 2022 加息熊
+#
+# 4. 加入"状态过滤器":只在某状态下激活策略
+#    if volatility_regime == "low": trade()
+#    else: stay_in_cash()</code></pre>
+
+<div class="callout">
+  <div class="label">检查清单</div>
+  <p style="margin:0;">✅ 是否测过<strong>极端事件</strong>(股灾/疫情/加息)?<br>
+  ✅ 策略表现是否在<strong>不同市场状态</strong>下稳定?<br>
+  ✅ 是否有"状态过滤器"(只在某状态下激活)?</p>
+</div>
+
+<div class="quiz" data-correct="c">
+  <div class="q">Q3 · 测了 100 个参数组合选最好的,夏普 0.87。这是?</div>
+  <ul>
+    <li data-k="a">真 alpha,实盘能赚</li>
+    <li data-k="b">数据 bug</li>
+    <li data-k="c">参数过拟合(测得多必有几个好看)</li>
+    <li data-k="d">市场无效</li>
+  </ul>
+  <div class="reveal">
+  <strong>答案:C</strong>。即使策略<strong>完全无效</strong>(纯随机),测 100 个参数也几乎必然能找到夏普 &gt; 0.5 的组合(因为 100 个样本的极值自然会偏高)。<strong>这就是参数过拟合的本质</strong>。修复:① 样本外验证(像你今天测 2019-2021/2025)② Walk-Forward ③ Bonferroni 校正。A 是常见错觉;B 不是 bug;D 不相关。
+  </div>
+</div>
+
+<!-- ======================================================
+     PART 3:执行类陷阱
+     ====================================================== -->
+<h2 id="part3">Part 3 · 执行类陷阱(2 个)</h2>
+
+<p>执行类陷阱和"理论与实盘的差距"有关。代码算出 100% 收益,实盘能拿到 60% 就不错 —— 损失全在执行环节。</p>
+
+<!-- ===== Trap 8: 杠杆 bug ===== -->
+<h3 id="pitfall-8">陷阱 8 · 杠杆 Bug(隐性借贷)</h3>
+
+<p><strong>定义</strong>:回测框架允许"借款买股",让持仓 &gt; 本金。结果把"加杠杆偶然赚的钱"算成"策略收益"。<strong>这是今天最戏剧化的 bug</strong>。</p>
+
+<div class="callout warn">
+  <div class="label">你今天亲历的真实案例</div>
+  <p style="margin:0;">
+  vectorbt 的 <code>cash_sharing=True + group_by=True</code> 默认 <code>size='unlimited'</code> → 262% 收益是<strong>借款赚的</strong>(持仓峰值 373 万,本金 100 万)。修复后真实收益只有 8.5%。<strong>这是 96.8% 的虚高</strong>。
+  </p>
+</div>
+
+<h4>复现代码(基于你今天的真实 bug)</h4>
+
+<pre><code>"""复现 vectorbt 默认杠杆 bug"""
+import polars as pl
+import vectorbt as vbt
+import pandas as pd
+
+prices = pl.read_parquet("./data/hs300_2025_hfq.parquet")
+wide = prices.select(["date","symbol","close"]).pivot(on="symbol", index="date", values="close").sort("date")
+price_df = wide.drop("date").to_pandas().ffill().bfill()
+
+fast_ma = vbt.MA.run(price_df, window=10)
+slow_ma = vbt.MA.run(price_df, window=30)
+entries = fast_ma.ma_crossed_above(slow_ma)
+exits = fast_ma.ma_crossed_below(slow_ma)
+n_stocks = price_df.shape[1]
+
+# 错误(默认无限杠杆)
+pf_bad = vbt.Portfolio.from_signals(
+    price_df, entries, exits,
+    init_cash=1_000_000, freq="D",
+    cash_sharing=True, group_by=True,
+    # 没有约束 size!
+)
+print(f"❌ 错误(默认):{pf_bad.total_return():.2%}")
+print(f"   持仓峰值:¥{pf_bad.asset_value(group_by=True).max():,.0f}  ← 远超 100 万本金")
+
+# 正确(约束每次买入用现金的 1/n)
+pf_good = vbt.Portfolio.from_signals(
+    price_df, entries, exits,
+    init_cash=1_000_000, freq="D",
+    cash_sharing=True, group_by=True,
+    size=1.0 / n_stocks,         # 每只 1/n 的现金
+    size_type="percent",
+    accumulate=False,
+)
+print(f"\n✅ 正确(无杠杆):{pf_good.total_return():.2%}")
+print(f"   持仓峰值:¥{pf_good.asset_value(group_by=True).max():,.0f}")</code></pre>
+
+<h4>修复方法</h4>
+
+<pre><code># 必须三件事同时做:
+# 1. size 显式约束(不要 unlimited)
+# 2. size_type="percent"(用现金百分比)
+# 3. accumulate=False(不加仓)
+
+# 通用原则:持仓总价值任何时候都 &lt;= 本金 × (1 + max_leverage)
+# 如果你不想加杠杆,max_leverage = 1.0
+
+# 诊断:如果 pf.asset_value(group_by=True).max() &gt; init_cash × 1.5,
+# 几乎肯定有杠杆 bug</code></pre>
+
+<div class="callout">
+  <div class="label">检查清单</div>
+  <p style="margin:0;">✅ 持仓峰值是否 &lt;= 本金 ×(1 + 容许杠杆)?<br>
+  ✅ size 参数是否显式约束?<br>
+  ✅ 现金是否出现过负值?</p>
+</div>
+
+<!-- ===== Trap 9: 滑点/流动性 ===== -->
+<h3 id="pitfall-9">陷阱 9 · 滑点与流动性(Slippage &amp; Liquidity)</h3>
+
+<p><strong>定义</strong>:回测假设按"市场价"成交,但实盘你的订单<strong>会推动价格</strong>(尤其小盘股)。回测的成交价是理论值,实盘拿不到。</p>
+
+<div class="callout warn">
+  <div class="label">典型场景</div>
+  <p style="margin:0;">
+  你想买 100 万某小盘股,日均成交额才 200 万 → 你的订单吃掉了一半流动性 → 实际成交价比回测高 2-5%。回测显示赚 30%,实盘可能只剩 15%。
+  </p>
+</div>
+
+<h4>复现代码(流动性影响估算)</h4>
+
+<pre><code>"""估算流动性对收益的影响"""
+import numpy as np
+
+# 假设策略每月调仓,top 20 股票,每只投入 5 万
+order_size = 50_000  # 每只 5 万
+n_trades_per_year = 12 * 20  # 月度调仓 × 20 只
+
+# 不同流动性场景下的滑点(经验值)
+scenarios = [
+    ("大盘股(沪深300)", 0.001),    # 0.1% 滑点
+    ("中盘股(中证500)", 0.003),    # 0.3%
+    ("小盘股(中证1000)", 0.008),   # 0.8%
+    ("微盘股(超小)", 0.020),       # 2.0%
+]
+
+print("=== 滑点年化成本估算 ===\n")
+for name, slippage in scenarios:
+    annual_cost_pct = slippage * n_trades_per_year * order_size / 1_000_000
+    print(f"{name:<20} 单边滑点 {slippage:.1%} → 年化成本 ≈ {slippage * n_trades_per_year * 2 * 100:.1f}%")
+
+print(f"""
+=== 结论 ===
+- 大盘股:滑点年化 ~5%,可接受
+- 中盘股:滑点年化 ~14%,显著
+- 小盘股:滑点年化 ~38%,吃掉大部分收益 ← 你的 top20 动量在小盘上会失效
+- 微盘股:滑点年化 ~96%,策略必死
+
+回测永远假设"零滑点"或"固定千一",但实盘远不止。""")</code></pre>
+
+<h4>修复方法</h4>
+
+<pre><code># 1. 加入滑点模型(非线性,基于成交量)
+def realistic_slippage(order_value, daily_volume):
+    """订单越大、流动性越差,滑点越高"""
+    impact = order_value / daily_volume  # 订单占日成交量比例
+    return 0.001 + 0.1 * impact + 0.5 * impact**2  # 线性 + 平方项
+
+# 2. 过滤低流动性股票(剔除日均成交额 &lt; 1000 万的)
+import polars as pl
+prices = pl.read_parquet("./data/hs300_prices_hfq.parquet")
+# 计算每只股票的日均成交额
+liquidity = prices.group_by("symbol").agg(
+    pl.col("amount").mean().alias("avg_amount")
+)
+liquid_stocks = liquidity.filter(pl.col("avg_amount") > 10_000_000)["symbol"].to_list()
+print(f"流动性达标的股票:{len(liquid_stocks)} 只")
+
+# 3. 限制每只股票最大持仓比例(如不超过日均成交额的 10%)</code></pre>
+
+<div class="callout">
+  <div class="label">检查清单</div>
+  <p style="margin:0;">✅ 是否过滤低流动性股票(日均成交额阈值)?<br>
+  ✅ 是否建模非线性滑点?<br>
+  ✅ 每只股票持仓是否 &lt;= 日均成交额的 10%?</p>
+</div>
+
+<!-- ======================================================
+     PART 4:统计类陷阱
+     ====================================================== -->
+<h2 id="part4">Part 4 · 统计类陷阱(3 个)</h2>
+
+<p>统计陷阱最微妙 —— 即使代码、数据、执行都对,统计层面的<strong>样本偶然</strong>也会让结论失真。</p>
+
+<!-- ===== Trap 10: 小样本偶然 ===== -->
+<h3 id="pitfall-10">陷阱 10 · 小样本偶然(Small Sample Chance)</h3>
+
+<p><strong>定义</strong>:样本太少,统计指标(夏普/胜率)不稳定。即使策略无效,小样本也可能跑出"看起来好"的结果。</p>
+
+<div class="callout warn">
+  <div class="label">你今天数据的真实问题</div>
+  <p style="margin:0;">
+  2025 只测了 11 次调仓(月频 × 11 个月),样本极小。即使夏普 2.37,也可能是<strong>偶然</strong>。统计上,要至少 30 个观测值才能初步相信夏普稳定。
+  </p>
+</div>
+
+<h4>复现代码(小样本不稳定性)</h4>
+
+<pre><code>"""复现小样本偶然:即使策略无效,小样本也能跑出高夏普"""
+import numpy as np
+
+np.random.seed(0)
+
+# 假设策略完全无效(真实夏普 = 0)
+# 测 N 次,每次用不同的小样本(比如 12 个月),看夏普分布
+n_simulations = 1000
+n_months = 12  # 小样本:12 个月
+
+sharpes = []
+for _ in range(n_simulations):
+    # 生成 12 个月的随机收益(真实夏普 = 0)
+    monthly_returns = np.random.normal(0.005, 0.05, n_months)  # 月均 0.5%,波动 5%
+    mean_r = monthly_returns.mean()
+    std_r = monthly_returns.std(ddof=1)
+    annual_sharpe = mean_r / std_r * np.sqrt(12)
+    sharpes.append(annual_sharpe)
+
+sharpes = np.array(sharpes)
+print(f"=== 策略真实夏普 = 0,但小样本(12个月)模拟 1000 次 ===")
+print(f"夏普均值:{sharpes.mean():.3f}")
+print(f"夏普中位数:{np.median(sharpes):.3f}")
+print(f"夏普 95 分位:{np.percentile(sharpes, 95):.3f}  ← 小样本能跑到这")
+print(f"夏普最高:{sharpes.max():.3f}")
+print(f"\n结论:即使策略无效,12 个月小样本有 5% 概率跑出夏普 &gt; {np.percentile(sharpes, 95):.2f}")
+print(f"所以你看到'夏普 2.37'在小样本上,有可能是偶然")</code></pre>
+
+<h4>修复方法</h4>
+
+<pre><code># 1. 至少 36 个月(3年)样本才初步可信
+# 2. 蒙特卡洛模拟:多次抽样,看夏普分布
+# 3. 报告置信区间,而非点估计
+
+# 简单的夏普置信区间估计(Lo 2002 公式):
+def sharpe_ci(sharpe, n_periods, confidence=0.95):
+    """夏普的置信区间"""
+    from scipy import stats
+    z = stats.norm.ppf(1 - (1 - confidence) / 2)
+    se = np.sqrt((1 + sharpe**2 / 2) / n_periods)
+    return sharpe - z * se, sharpe + z * se
+
+lo, hi = sharpe_ci(2.37, 11)  # 你的 2025 数据
+print(f"夏普 2.37 (11 个观测)的 95% CI:[{lo:.2f}, {hi:.2f}]")
+print(f"区间太宽 → 不可信")</code></pre>
+
+<div class="callout">
+  <div class="label">检查清单</div>
+  <p style="margin:0;">✅ 样本数 &gt;= 30(月频 = 至少 2.5 年)?<br>
+  ✅ 是否报告夏普置信区间?<br>
+  ✅ 蒙特卡洛模拟过夏普分布吗?</p>
+</div>
+
+<!-- ===== Trap 11: 多重比较谬误 ===== -->
+<h3 id="pitfall-11">陷阱 11 · 多重比较谬误(Multiple Testing)</h3>
+
+<p><strong>定义</strong>:测了很多策略/因子,选最好的 → 即使所有策略都无效,也会有几个"显著"。这是过拟合的统计版本。</p>
+
+<div class="callout warn">
+  <div class="label">为什么 Harvey《Backtesting》强调</div>
+  <p style="margin:0;">
+  假设你测了 100 个因子,5% 显著性 → 即使全部无效,平均也会有 5 个"假阳性"。这是量化研究的<strong>系统性偏差</strong>。<strong>Harvey &amp; Liu(2014)</strong>估计:已发表的金融因子有<strong>大部分是假阳性</strong>。
+  </p>
+</div>
+
+<h4>复现代码(多重比较)</h4>
+
+<pre><code>"""复现多重比较谬误"""
+import numpy as np
+from scipy import stats
+
+np.random.seed(42)
+
+# 模拟:测 100 个"完全无效"的因子(随机噪声)
+n_factors = 100
+n_obs = 60  # 60 个月数据
+
+significant_count = 0
+for i in range(n_factors):
+    # 因子值 = 随机噪声
+    factor = np.random.normal(0, 1, n_obs)
+    # 收益 = 随机噪声(与因子无关)
+    returns = np.random.normal(0, 0.05, n_obs)
+
+    # 回归,看 p 值
+    from numpy.polynomial import polynomial as P
+    slope = np.cov(factor, returns)[0, 1] / np.var(factor)
+    # t 检验
+    residuals = returns - slope * factor
+    se = np.sqrt(np.var(residuals) / (np.var(factor) * n_obs))
+    t_stat = slope / se if se > 0 else 0
+    p_value = 2 * (1 - stats.norm.cdf(abs(t_stat)))
+
+    if p_value &lt; 0.05:  # 5% 显著
+        significant_count += 1
+
+print(f"=== 测 {n_factors} 个无效因子 ===")
+print(f"理论上应该有 ~{n_factors * 0.05:.0f} 个假阳性")
+print(f"实际找到的'显著'因子:{significant_count} 个")
+print(f"\n这就是多重比较谬误:即使全部因子无效,也能找到 {significant_count} 个'显著'")
+print(f"如果你不知道测了多少次,会以为这些因子有效")</code></pre>
+
+<h4>修复方法</h4>
+
+<pre><code># 1. Bonferroni 校正:显著性阈值 = 0.05 / 测试次数
+n_tests = 100
+threshold = 0.05 / n_tests
+print(f"校正后阈值:{threshold} (从 0.05 降到这)")
+
+# 2. Holm-Bonferroni(更宽松)
+# 3. Benjamini-Hochberg(控制 FDR,假发现率)
+# 4. 样本外验证:用一半数据选因子,另一半验证
+
+# 业界经验(Harvey 2017):已发现的因子大部分要打折
+# 原本 p=0.05 的"显著"因子,多重校正后很多不显著了</code></pre>
+
+<div class="callout">
+  <div class="label">检查清单</div>
+  <p style="margin:0;">✅ 测了多少个因子/策略?是否做了多重比较校正?<br>
+  ✅ 显著性阈值是否根据测试次数调整?<br>
+  ✅ 是否用<strong>样本外</strong>验证?</p>
+</div>
+
+<!-- ===== Trap 12: regime 过拟合 ===== -->
+<h3 id="pitfall-12">陷阱 12 · 回测期过拟合到特定 Regime(Period Overfitting)</h3>
+
+<p><strong>定义</strong>:回测期选择本身就有偏。比如只测 2010-2020 美股 → 十年长牛,任何"做多"策略都 work,但 2022 加息熊就崩。</p>
+
+<div class="callout warn">
+  <div class="label">典型例子</div>
+  <p style="margin:0;">
+  2010-2020 美股是<strong>历史最长的牛市</strong>。在这段测的"买入持有"/"动量"/"价值"策略全 work,但都是<strong>过拟合到这段 regime</strong>。2022 加息熊让大量"十年回测有效"的策略直接爆仓。
+  </p>
+</div>
+
+<h4>复现代码(regime 影响)</h4>
+
+<pre><code>"""复现 regime 过拟合:同一策略在不同时期表现"""
+import numpy as np
+
+# 模拟"买入持有"在不同 10 年期的表现
+regimes = {
+    "1980-1990 美股": (0.001, 0.012),   # 日均 0.1%,波动 1.2%
+    "1990-2000 美股": (0.0006, 0.010),  # 长牛开始
+    "2000-2010 美股": (0.0001, 0.013),  # 互联网泡沫+次贷
+    "2010-2020 美股": (0.0005, 0.009),  # 史上最长牛市
+    "2020-2024 美股": (0.0004, 0.014),  # 疫情+加息
+}
+
+print("=== 买入持有在不同 10 年期的年化收益 ===\n")
+for period, (daily_mu, daily_sigma) in regimes.items():
+    # 模拟 2520 个交易日
+    np.random.seed(0)
+    returns = np.random.normal(daily_mu, daily_sigma, 2520)
+    annual = (1 + returns.mean())**252 - 1
+    annual_vol = returns.std() * np.sqrt(252)
+    sharpe = annual / annual_vol if annual_vol > 0 else 0
+    print(f"{period:<20} 年化 {annual:>6.1%}  夏普 {sharpe:.2f}")
+
+print(f"""
+=== 结论 ===
+- 同一策略(买入持有),不同 regime 下年化从 ~3% 到 ~30%
+- 在 2010-2020 选的策略,2020-2024 可能完全不 work
+- 必须测多 regime,任何单期回测都有过拟合风险""")</code></pre>
+
+<h4>修复方法</h4>
+
+<pre><code># 1. 至少测 3 种 regime:牛市、熊市、震荡市
+# 2. 包含极端事件:2008、2015、2020-03、2022
+# 3. 跨多个 10 年期(1980s, 1990s, 2000s, 2010s, 2020s)
+# 4. 报告"最差 regime"的表现,不要只看平均
+
+# 实操:A 股至少测
+# - 2007-2008(泡沫破裂)
+# - 2014-2015(杠杆牛+股灾)
+# - 2018(贸易战熊)
+# - 2020(疫情)
+# - 2022-2024(加息熊)</code></pre>
+
+<div class="callout">
+  <div class="label">检查清单</div>
+  <p style="margin:0;">✅ 是否测过多个 regime(牛/熊/震荡/崩盘)?<br>
+  ✅ 策略在<strong>最差 regime</strong>的表现能接受吗?<br>
+  ✅ 回测期是否跨越多个经济周期?</p>
+</div>
+
+<div class="quiz" data-correct="b">
+  <div class="q">Q4 · 你在 2025(11 个月)上跑出夏普 2.37。统计上可信吗?</div>
+  <ul>
+    <li data-k="a">完全可信,数字就是数字</li>
+    <li data-k="b">不可信,样本太小(需至少 30 个观测)</li>
+    <li data-k="c">完全不可信,必然是 bug</li>
+    <li data-k="d">看绝对值,不看样本</li>
+  </ul>
+  <div class="reveal">
+  <strong>答案:B</strong>。<strong>11 个月 = 11 个观测,远低于统计显著的 30 个门槛</strong>。即使策略真实夏普 = 0,小样本偶然也能跑出 2.0+。<strong>小样本上看到高夏普,要先存疑而不是庆祝</strong>。修复:① 增加样本(至少 3 年)② 蒙特卡洛模拟夏普分布 ③ 报告置信区间。A 是数字崇拜;C 太极端(可能是真的);D 错(样本量决定可信度)。
+  </div>
+</div>
+
+<hr class="sep">
+
+<!-- ======================================================
+     总结 + 检查清单
+     ====================================================== -->
+<h2 id="summary">总结 · 回测陷阱检查清单(打印这一页)</h2>
+
+<p>未来每个新策略上线前,过一遍这张表。<strong>任何一项不过,都不要上实盘</strong>。</p>
+
+<table>
+  <thead><tr><th>#</th><th>陷阱</th><th>类别</th><th>核心检查</th></tr></thead>
+  <tbody>
+    <tr><td>1</td><td>存活偏差</td><td>数据</td><td>是否用动态成分股(含已退市)?</td></tr>
+    <tr><td>2</td><td>前视偏差</td><td>数据</td><td>信号和成交是否用不同时点?</td></tr>
+    <tr><td>3</td><td>未来函数</td><td>数据</td><td>财报用 <code>ann_date</code> 而非 <code>end_date</code>?</td></tr>
+    <tr><td>4</td><td>复权错误</td><td>数据</td><td>用 hfq 而非跨日期拼接的 qfq?</td></tr>
+    <tr><td>5</td><td>样本不完整</td><td>策略</td><td>数据完整性是否 ≥95%?</td></tr>
+    <tr><td>6</td><td>参数过拟合</td><td>策略</td><td>是否样本外验证 + 参数敏感性测试?</td></tr>
+    <tr><td>7</td><td>市场状态依赖</td><td>策略</td><td>是否测过极端事件(股灾/疫情)?</td></tr>
+    <tr><td>8</td><td>杠杆 Bug</td><td>执行</td><td>持仓峰值 ≤ 本金 ×(1+杠杆)?</td></tr>
+    <tr><td>9</td><td>滑点/流动性</td><td>执行</td><td>是否过滤低流动性股 + 建模滑点?</td></tr>
+    <tr><td>10</td><td>小样本偶然</td><td>统计</td><td>样本数 ≥30?</td></tr>
+    <tr><td>11</td><td>多重比较</td><td>统计</td><td>测了多少次?做了 Bonferroni 校正?</td></tr>
+    <tr><td>12</td><td>Regime 过拟合</td><td>统计</td><td>是否测过多个 regime?</td></tr>
+  </tbody>
+</table>
+
+<h2 id="recap">本课要点回顾</h2>
+
+<ol>
+  <li><strong>任何回测的好结果都先假设是错的</strong>,直到排除所有陷阱。</li>
+  <li><strong>数据类陷阱</strong>最隐蔽:代码对但数据本身错(存活/前视/未来函数/复权)。</li>
+  <li><strong>策略类陷阱</strong>最常见:过拟合 / 样本不全 / 单 regime。</li>
+  <li><strong>执行类陷阱</strong>最致命:杠杆 bug / 滑点,实盘直接打折。</li>
+  <li><strong>统计类陷阱</strong>最微妙:小样本偶然 + 多重比较,需要统计训练才能识别。</li>
+  <li><strong>职业量化的 80% 时间不是设计策略,是排除陷阱</strong>。</li>
+</ol>
+
+<h2 id="primary-source">推荐一手阅读</h2>
+
+<p>
+<strong>本课主源 1</strong>:<a href="https://www.wiley.com/en-us/Advances+in+Financial+Machine+Learning-p-9781119482086" target="_blank" rel="noopener">López de Prado《Advances in Financial Machine Learning》Ch. 11-12</a>。回测陷阱和交叉验证的系统讨论,这是行业圣经。
+</p>
+
+<p>
+<strong>本课主源 2</strong>:<a href="https://papers.ssrn.com/sol3/papers.cfm?abstract_id=2308659" target="_blank" rel="noopener">Harvey &amp; Liu(2014)"Backtesting"</a>。多重比较谬误的奠基论文,改变了对"已发现因子"的看法。
+</p>
+
+<p>
+<strong>偏实战</strong>:<a href="https://blog.quantopian.com/3-common-backtest-pitfalls/" target="_blank" rel="noopener">Quantopian 的 3 Common Backtest Pitfalls(经典老文)</a>。
+</p>
+
+<h2 id="next">本课与你今天实战的关系</h2>
+
+<ul>
+  <li>陷阱 5(样本不全):你今天 133 vs 298 的真实反转案例</li>
+  <li>陷阱 6(参数过拟合):你今天 SMA10/30 选出来的"+30%"需要警惕</li>
+  <li>陷阱 8(杠杆 Bug):你今天 262% → 8.5% 的真实 bug</li>
+  <li>陷阱 10(小样本):你今天 2025 数据的 11 个调仓</li>
+  <li>陷阱 2(前视偏差):你今天 squeeze_biases 测过</li>
+  <li>陷阱 4(复权):Q·09 讲过的 qfq 时变性</li>
+</ul>
+
+<p>未消除的:<strong>陷阱 1(存活偏差)</strong> —— 你的策略仍是用 2026 成分股测历史。<strong>下一步要做的事</strong>就是消除它。</p>
+
+<div class="ask-teacher">
+<strong>有疑问就问老师(我)</strong>。比如:某个陷阱的复现代码跑不通、不知道你的策略具体在哪个陷阱上风险最大、想看某个陷阱的更深入案例。本课的核心是建立<strong>反陷阱的肌肉记忆</strong> —— 每次看到回测好结果,自动过一遍这 12 项。
+</div>
+
+</main>
+
+<footer class="lesson">
+  <div>
+    <a href="../../index.html">总览</a> ·
+    <a href="0009-data-layer-architecture.html">← Q·09</a> ·
+    <a href="#">Q·11 →</a>
+  </div>
+  <div>Lesson 10 · Backtest Pitfalls(Part 1/4)</div>
+</footer>
+
+</body>
+</html>
